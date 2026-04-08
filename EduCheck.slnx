@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="EduCheck.Core/EduCheck.Core.csproj" />
+  <Project Path="EduCheck.EmailWorker/EduCheck.EmailWorker.csproj" />
+  <Project Path="EduCheck.Infrastructure/EduCheck.Infrastructure.csproj" />
+  <Project Path="EduCheck.Web/EduCheck.Web.csproj" />
+</Solution>
