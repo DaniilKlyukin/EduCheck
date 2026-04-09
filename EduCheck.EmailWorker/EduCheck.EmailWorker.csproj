@@ -16,8 +16,4 @@
   <ItemGroup>
     <ProjectReference Include="..\EduCheck.Infrastructure\EduCheck.Infrastructure.csproj" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Services\" />
-  </ItemGroup>
 </Project>
