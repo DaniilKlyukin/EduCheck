@@ -32,4 +32,9 @@ public class SubmissionHistory
     /// Флаг, указывающий, была ли данная конкретная версия прислана позже дедлайна задания.
     /// </summary>
     public bool IsLate { get; set; }
+
+    /// <summary>
+    /// Результат автоматического анализа кода (в формате JSON или текстового отчета).
+    /// </summary>
+    public string? AnalysisResult { get; set; }
 }
