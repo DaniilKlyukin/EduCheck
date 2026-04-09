@@ -7,7 +7,6 @@ using MailKit.Net.Imap;
 using MailKit.Search;
 using Microsoft.EntityFrameworkCore;
 using MimeKit;
-using System.Reflection.Metadata;
 using System.Security.Cryptography;
 
 namespace EduCheck.EmailWorker;
@@ -127,6 +126,14 @@ public class Worker : BackgroundService
 
             if (await db.SubmissionHistory.AnyAsync(h => h.FileHash == hash, ct)) continue;
 
+            var analysisResult = "Файл не является архивом или не поддерживается.";
+            if (attachment.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                var analyzer = scope.ServiceProvider.GetRequiredService<ICodeAnalyzer>();
+                ms.Position = 0;
+                analysisResult = await analyzer.AnalyzeZipAsync(ms, ct);
+            }
+
             var submission = await db.Submissions
                 .FirstOrDefaultAsync(s => s.StudentId == student.Id && s.AssignmentId == assignment.Id, ct);
 
@@ -165,7 +172,8 @@ public class Worker : BackgroundService
                 FileStoragePath = storagePath,
                 FileHash = hash,
                 ReceivedAt = DateTime.UtcNow,
-                IsLate = isLate
+                IsLate = isLate,
+                AnalysisResult = analysisResult
             };
 
             db.SubmissionHistory.Add(history);
