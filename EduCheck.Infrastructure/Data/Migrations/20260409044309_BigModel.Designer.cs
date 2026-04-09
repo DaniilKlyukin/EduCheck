@@ -3,6 +3,7 @@ using System;
 using EduCheck.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EduCheck.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260409044309_BigModel")]
+    partial class BigModel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -191,18 +194,16 @@ namespace EduCheck.Infrastructure.Data.Migrations
 
                     b.HasIndex("SubmissionId");
 
-                    b.ToTable("SubmissionHistory");
+                    b.ToTable("Histories");
                 });
 
             modelBuilder.Entity("EduCheck.Core.Entities.Assignment", b =>
                 {
-                    b.HasOne("EduCheck.Core.Entities.Subject", "Subject")
+                    b.HasOne("EduCheck.Core.Entities.Subject", null)
                         .WithMany("Assignments")
                         .HasForeignKey("SubjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Subject");
                 });
 
             modelBuilder.Entity("EduCheck.Core.Entities.SubmissionHistory", b =>
