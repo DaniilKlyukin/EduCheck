@@ -19,6 +19,7 @@ builder.Services.AddMinio(configureSource => configureSource
 
 builder.Services.AddScoped<IEmailParser, EmailParser>();
 builder.Services.AddScoped<IFileStorage, MinioFileStorage>();
+builder.Services.AddScoped<ICodeAnalyzer, RoslynCodeAnalyzer>();
 
 builder.Services.AddHostedService<Worker>();
 
