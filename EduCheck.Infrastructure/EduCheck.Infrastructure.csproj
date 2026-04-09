@@ -21,8 +21,4 @@
     <ProjectReference Include="..\EduCheck.Core\EduCheck.Core.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Services\" />
-  </ItemGroup>
-
 </Project>
