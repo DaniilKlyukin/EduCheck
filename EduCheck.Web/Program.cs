@@ -1,4 +1,6 @@
+using EduCheck.Core.Interfaces;
 using EduCheck.Infrastructure.Data;
+using EduCheck.Infrastructure.Services;
 using EduCheck.Web.Components;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,6 +13,8 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
 var app = builder.Build();
 
