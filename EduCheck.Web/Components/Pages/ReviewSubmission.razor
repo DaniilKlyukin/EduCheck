@@ -1,0 +1,113 @@
+﻿@page "/review/{Id:guid}"
+@using EduCheck.Core.Entities
+@using EduCheck.Core.Interfaces
+@using EduCheck.Infrastructure.Data
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IEmailService EmailService
+@inject NavigationManager Nav
+
+@if (submission == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <h3>Проверка: @student.Name (@student.Group)</h3>
+    <h5>@assignment.Title — @assignment.Subject.Title</h5>
+
+    <div class="row">
+        <div class="col-md-6">
+            <h4>История версий</h4>
+            <ul class="list-group mb-3">
+                @foreach (var h in submission.History.OrderByDescending(x => x.Version))
+                {
+                    <li class="list-group-item">
+                        <b>v@h.Version</b> — @h.FileName (@h.ReceivedAt.ToLocalTime())
+                        @if (h.IsLate)
+                        {
+                            <span class="badge bg-danger">Late</span>
+                        }
+                        <div class="mt-2 small text-muted">
+                            <pre class="bg-light p-2">@h.AnalysisResult</pre>
+                        </div>
+                    </li>
+                }
+            </ul>
+        </div>
+
+        <div class="col-md-6">
+            <h4>Выставить оценку</h4>
+            <div class="card p-3">
+                <div class="mb-3">
+                    <label>Статус</label>
+                    <select @bind="submission.Status" class="form-select">
+                        @foreach (var status in Enum.GetValues<EduCheck.Core.Enums.SubmissionStatus>())
+                        {
+                            <option value="@status">@status</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label>Оценка</label>
+                    <input type="number" @bind="review.Grade" class="form-control" />
+                </div>
+                <div class="mb-3">
+                    <label>Комментарий преподавателя</label>
+                    <textarea @bind="review.TeacherComment" class="form-control" rows="4"></textarea>
+                </div>
+                <button class="btn btn-success" @onclick="SaveAndSend" disabled="@isSaving">
+                    @(isSaving ? "Отправка..." : "Сохранить и отправить студенту")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private Submission? submission;
+    private Student student;
+    private Assignment assignment;
+    private Review review = new();
+    private bool isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = DbFactory.CreateDbContext();
+        submission = await db.Submissions
+            .Include(s => s.History)
+            .FirstOrDefaultAsync(s => s.Id == Id);
+
+        if (submission != null)
+        {
+            student = await db.Students.FirstAsync(s => s.Id == submission.StudentId);
+            assignment = await db.Assignments.Include(a => a.Subject).FirstAsync(a => a.Id == submission.AssignmentId);
+            review.SubmissionId = submission.Id;
+            review.SubmissionVersion = submission.CurrentVersion;
+        }
+    }
+
+    private async Task SaveAndSend()
+    {
+        isSaving = true;
+        using var db = DbFactory.CreateDbContext();
+        
+        review.Id = Guid.NewGuid();
+        review.CheckedAt = DateTime.UtcNow;
+        db.Reviews.Add(review);
+
+        db.Submissions.Update(submission!);
+        await db.SaveChangesAsync();
+
+        var body = $"Ваша работа по предмету {assignment.Subject.Title} ({assignment.Title}) проверена.\n\n" +
+                   $"Статус: {submission.Status}\n" +
+                   $"Оценка: {review.Grade ?? 0}\n" +
+                   $"Комментарий: {review.TeacherComment}";
+        
+        await EmailService.SendFeedbackAsync(student.Email, "Результат проверки работы", body);
+
+        isSaving = false;
+        Nav.NavigateTo("/submissions");
+    }
+}
