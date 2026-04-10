@@ -1,0 +1,45 @@
+﻿@page "/students"
+@using EduCheck.Core.Entities
+@using EduCheck.Core.Interfaces
+@inject IStudentService StudentService
+
+<h3>Студенты в базе</h3>
+
+<div class="mb-3">
+    <input @bind="searchTerm" @bind:event="oninput" class="form-control" placeholder="Поиск по имени или группе..." />
+</div>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Группа</th>
+            <th>ФИО</th>
+            <th>Email</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var student in FilteredStudents)
+        {
+            <tr>
+                <td><span class="badge bg-secondary">@student.Group</span></td>
+                <td>@student.Name</td>
+                <td><a href="mailto:@student.Email">@student.Email</a></td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code{
+    private List<Student> students = new();
+    private string searchTerm = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        students = await StudentService.GetAllStudentsAsync();
+    }
+
+    private IEnumerable<Student> FilteredStudents => students
+        .Where(s => string.IsNullOrWhiteSpace(searchTerm)
+                || s.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                || s.Group.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+}
