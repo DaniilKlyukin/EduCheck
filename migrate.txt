@@ -1,0 +1,1 @@
+dotnet ef migrations add MigrationName --project EduCheck.Infrastructure --startup-project EduCheck.Web
