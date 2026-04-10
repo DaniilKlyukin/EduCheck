@@ -18,9 +18,4 @@ public class Assignment
     /// Срок сдачи, после которого загрузки помечаются как IsLate.
     /// </summary>
     public DateTime Deadline { get; set; }
-
-    /// <summary>
-    /// Порядковый номер для сортировки заданий в интерфейсе.
-    /// </summary>
-    public int Order { get; set; }
 }

@@ -10,8 +10,9 @@ public class Submission
 {
     public Guid Id { get; set; }
     public Guid StudentId { get; set; }
+    public Student Student { get; set; } = null!;
     public Guid AssignmentId { get; set; }
-
+    public Assignment Assignment { get; set; } = null!;
     /// <summary>
     /// Текущий этап обработки работы (новое, в проверке, принято и т.д.).
     /// </summary>
