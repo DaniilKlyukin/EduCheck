@@ -1,0 +1,102 @@
+﻿@page "/subjects"
+@rendermode InteractiveServer
+@using EduCheck.Core.Entities
+@using EduCheck.Core.Interfaces
+@using Microsoft.AspNetCore.Components.Web
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@inject ISubjectService SubjectService
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3>Учебные предметы</h3>
+    <button class="btn btn-primary" @onclick="() => showCreateModal = true">Добавить предмет</button>
+</div>
+
+<div class="row">
+    @foreach (var subject in subjects)
+    {
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">@subject.Title</h5>
+                    <h6 class="card-subtitle mb-2 text-muted">Семестр: @subject.Semester</h6>
+                    <p class="card-text">Заданий: @subject.Assignments.Count</p>
+                    <div class="btn-group w-100">
+                        <a href="/subject/@subject.Id" class="btn btn-outline-primary">Управление</a>
+                        <button class="btn btn-outline-danger" @onclick="() => DeleteSubject(subject.Id)">Удалить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (showCreateModal)
+{
+    <div class="modal show d-block" style="background: rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Новый предмет</h5>
+                    <button type="button" class="btn-close" @onclick="() => showCreateModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Название предмета</label>
+                        <input @bind="newSubject.Title"
+                               class="form-control"
+                               placeholder="Например, ООП или Высшая математика" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Семестр</label>
+                        <input @bind="newSubject.Semester"
+                               type="number"
+                               min="1"
+                               max="12"
+                               class="form-control"
+                               placeholder="Введите номер семестра (1-12)" />
+                        <div class="form-text">Укажите семестр, в котором преподается дисциплина.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => showCreateModal = false">Отмена</button>
+                    <button class="btn btn-primary" @onclick="SaveSubject">Сохранить предмет</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool showCreateModal;
+    private List<Subject> subjects = new();
+    private Subject newSubject = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        subjects = await SubjectService.GetAllSubjectsAsync();
+    }
+
+    private async Task DeleteSubject(Guid id)
+    {
+        await SubjectService.DeleteSubjectAsync(id);
+
+        subjects = await SubjectService.GetAllSubjectsAsync();
+    }
+
+    private async Task SaveSubject()
+    {
+        if (string.IsNullOrWhiteSpace(newSubject.Title) || newSubject.Semester <= 0)
+        {
+            return;
+        }
+
+        await SubjectService.CreateSubjectAsync(newSubject);
+
+        newSubject = new();
+
+        showCreateModal = false;
+
+        subjects = await SubjectService.GetAllSubjectsAsync();
+    }
+}
