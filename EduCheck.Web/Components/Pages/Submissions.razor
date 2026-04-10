@@ -1,9 +1,9 @@
 ﻿@page "/submissions"
-@using EduCheck.Core.Entities
+@using EduCheck.Core.Common
+@using EduCheck.Core.DTOs
 @using EduCheck.Core.Enums
-@using EduCheck.Infrastructure.Data
-@using Microsoft.EntityFrameworkCore
-@inject IDbContextFactory<AppDbContext> DbFactory
+@using EduCheck.Core.Interfaces
+@inject ISubmissionService SubmissionService
 @inject NavigationManager Nav
 
 <h3>Все работы</h3>
@@ -17,7 +17,7 @@
             <option value="">Все статусы</option>
             @foreach (var status in Enum.GetValues<SubmissionStatus>())
             {
-                <option value="@status">@status</option>
+                <option value="@status">@status.GetDisplayName()</option>
             }
         </select>
     </div>
@@ -48,7 +48,7 @@
                 <td>@sub.Group</td>
                 <td>@sub.SubjectTitle / @sub.AssignmentTitle</td>
                 <td>v@(sub.Version)</td>
-                <td><span class="badge bg-info">@sub.Status</span></td>
+                <td><span class="badge bg-info">@sub.Status.GetDisplayName()</span></td>
                 <td>
                     <button class="btn btn-sm btn-primary" @onclick="() => Nav.NavigateTo($" /review/{sub.Id}")">Проверить</button>
                 </td>
@@ -58,42 +58,19 @@
 </table>
 
 @code {
-    private List<SubmissionVm> submissions = new();
+    private List<SubmissionSummaryDto> submissions = new();
     private string filterGroup = "";
     private SubmissionStatus? filterStatus;
     private bool onlyLate;
 
     protected override async Task OnInitializedAsync()
     {
-        using var db = DbFactory.CreateDbContext();
-        submissions = await db.Submissions
-            .Select(s => new SubmissionVm
-            {
-                Id = s.Id,
-                StudentName = db.Students.First(st => st.Id == s.StudentId).Name,
-                Group = db.Students.First(st => st.Id == s.StudentId).Group,
-                SubjectTitle = db.Assignments.Include(a => a.Subject).First(a => a.Id == s.AssignmentId).Subject.Title,
-                AssignmentTitle = db.Assignments.First(a => a.Id == s.AssignmentId).Title,
-                Version = s.CurrentVersion,
-                Status = s.Status,
-                HasLateUpload = s.HasLateUpload
-            }).ToListAsync();
+        submissions = await SubmissionService.GetAllSubmissionsAsync();
     }
 
-    private IEnumerable<SubmissionVm> FilteredSubmissions => submissions
+    private IEnumerable<SubmissionSummaryDto> FilteredSubmissions => submissions
         .Where(s => string.IsNullOrEmpty(filterGroup) || s.Group.Contains(filterGroup, StringComparison.OrdinalIgnoreCase))
         .Where(s => filterStatus == null || s.Status == filterStatus)
         .Where(s => !onlyLate || s.HasLateUpload);
 
-    public class SubmissionVm
-    {
-        public Guid Id { get; set; }
-        public string StudentName { get; set; }
-        public string Group { get; set; }
-        public string SubjectTitle { get; set; }
-        public string AssignmentTitle { get; set; }
-        public int Version { get; set; }
-        public SubmissionStatus Status { get; set; }
-        public bool HasLateUpload { get; set; }
-    }
 }

@@ -1,6 +1,5 @@
-using EduCheck.Core.Interfaces;
 using EduCheck.Infrastructure.Data;
-using EduCheck.Infrastructure.Services;
+using EduCheck.Web;
 using EduCheck.Web.Components;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,13 +7,13 @@ var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-builder.Services.AddDbContext<AppDbContext>(opt =>
+builder.Services.AddDbContextFactory<AppDbContext>(opt =>
     opt.UseNpgsql(connectionString));
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+builder.Services.AddWebServices();
 
 var app = builder.Build();
 

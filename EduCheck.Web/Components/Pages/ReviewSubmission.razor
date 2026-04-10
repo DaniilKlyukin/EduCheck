@@ -1,9 +1,8 @@
 ﻿@page "/review/{Id:guid}"
+@using EduCheck.Core.Common
 @using EduCheck.Core.Entities
 @using EduCheck.Core.Interfaces
-@using EduCheck.Infrastructure.Data
-@using Microsoft.EntityFrameworkCore
-@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISubmissionService SubmissionService
 @inject IEmailService EmailService
 @inject NavigationManager Nav
 
@@ -13,8 +12,8 @@
 }
 else
 {
-    <h3>Проверка: @student.Name (@student.Group)</h3>
-    <h5>@assignment.Title — @assignment.Subject.Title</h5>
+    <h3>Проверка: @submission.Student.Name (@submission.Student.Group)</h3>
+    <h5>@submission.Assignment.Title — @submission.Assignment.Subject.Title</h5>
 
     <div class="row">
         <div class="col-md-6">
@@ -44,7 +43,7 @@ else
                     <select @bind="submission.Status" class="form-select">
                         @foreach (var status in Enum.GetValues<EduCheck.Core.Enums.SubmissionStatus>())
                         {
-                            <option value="@status">@status</option>
+                            <option value="@status">@status.GetDisplayName()</option>
                         }
                     </select>
                 </div>
@@ -67,23 +66,15 @@ else
 @code {
     [Parameter] public Guid Id { get; set; }
     private Submission? submission;
-    private Student student;
-    private Assignment assignment;
     private Review review = new();
-    private bool isSaving;
+    private bool isSaving = false;
 
     protected override async Task OnInitializedAsync()
     {
-        using var db = DbFactory.CreateDbContext();
-        submission = await db.Submissions
-            .Include(s => s.History)
-            .FirstOrDefaultAsync(s => s.Id == Id);
+        submission = await SubmissionService.GetSubmissionByIdAsync(Id);
 
         if (submission != null)
         {
-            student = await db.Students.FirstAsync(s => s.Id == submission.StudentId);
-            assignment = await db.Assignments.Include(a => a.Subject).FirstAsync(a => a.Id == submission.AssignmentId);
-            review.SubmissionId = submission.Id;
             review.SubmissionVersion = submission.CurrentVersion;
         }
     }
@@ -91,22 +82,7 @@ else
     private async Task SaveAndSend()
     {
         isSaving = true;
-        using var db = DbFactory.CreateDbContext();
-        
-        review.Id = Guid.NewGuid();
-        review.CheckedAt = DateTime.UtcNow;
-        db.Reviews.Add(review);
-
-        db.Submissions.Update(submission!);
-        await db.SaveChangesAsync();
-
-        var body = $"Ваша работа по предмету {assignment.Subject.Title} ({assignment.Title}) проверена.\n\n" +
-                   $"Статус: {submission.Status}\n" +
-                   $"Оценка: {review.Grade ?? 0}\n" +
-                   $"Комментарий: {review.TeacherComment}";
-        
-        await EmailService.SendFeedbackAsync(student.Email, "Результат проверки работы", body);
-
+        await SubmissionService.SubmitReviewAsync(Id, review, submission.Status);
         isSaving = false;
         Nav.NavigateTo("/submissions");
     }
