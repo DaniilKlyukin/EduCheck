@@ -17,9 +17,7 @@ builder.Services.AddMinio(configureSource => configureSource
     .WithCredentials(storageSettings["AccessKey"], storageSettings["SecretKey"])
     .WithSSL(false));
 
-builder.Services.AddScoped<IEmailParser, EmailParser>();
-builder.Services.AddScoped<IFileStorage, MinioFileStorage>();
-builder.Services.AddScoped<ICodeAnalyzer, RoslynCodeAnalyzer>();
+builder.Services.AddEmailWorkerServices();
 
 builder.Services.AddHostedService<Worker>();
 

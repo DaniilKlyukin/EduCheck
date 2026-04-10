@@ -28,7 +28,7 @@ public class Worker : BackgroundService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            _logger.LogInformation("Проверка почты в: {time}", DateTimeOffset.Now);
+            _logger.LogInformation($"Проверка почты в: {DateTimeOffset.Now}");
 
             try
             {
@@ -58,23 +58,33 @@ public class Worker : BackgroundService
 
         foreach (var uid in uids)
         {
-            var message = await client.Inbox.GetMessageAsync(uid, ct);
-
-            using var scope = _scopeFactory.CreateScope();
-
-            var parser = scope.ServiceProvider.GetRequiredService<IEmailParser>();
-
-            var parsed = parser.Parse(message.Subject);
-
-            if (parsed == null)
+            try
             {
-                _logger.LogWarning("Формат темы не распознан: {Subject}", message.Subject);
-                continue;
+                var message = await client.Inbox.GetMessageAsync(uid, ct);
+
+                using var scope = _scopeFactory.CreateScope();
+
+                var parser = scope.ServiceProvider.GetRequiredService<IEmailParser>();
+
+                var parsed = parser.Parse(message.Subject);
+
+                if (parsed == null)
+                {
+                    _logger.LogWarning($"Формат темы не распознан: {message.Subject}");
+                }
+                else
+                {
+                    await HandleMessageAsync(scope, message, parsed, ct);
+                }
             }
-
-            await HandleMessageAsync(scope, message, parsed, ct);
-
-            await client.Inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, ct);
+            catch(Exception ex)
+            {
+                _logger.LogError(ex, $"Ошибка при обработке письма UID: {uid}");
+            }
+            finally
+            {
+                await client.Inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, ct);
+            }
         }
 
         await client.DisconnectAsync(true, ct);
@@ -89,9 +99,14 @@ public class Worker : BackgroundService
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var storage = scope.ServiceProvider.GetRequiredService<IFileStorage>();
 
-        var email = message.From.Mailboxes.FirstOrDefault()?.Address;
+        var mailbox = message.From.Mailboxes.FirstOrDefault();
+        var email = mailbox?.Address;
 
-        if (string.IsNullOrEmpty(email)) return;
+        if (string.IsNullOrEmpty(email))
+        {
+            _logger.LogWarning($"Почта не найдена: {mailbox?.Name}");
+            return;
+        }
 
         var student = await db.Students.FirstOrDefaultAsync(s => s.Email == email, ct);
 
@@ -106,6 +121,8 @@ public class Worker : BackgroundService
             };
 
             db.Students.Add(student);
+
+            _logger.LogInformation($"Создан новый студент: {student.Name} {student.Email}");
         }
 
         var assignment = await db.Assignments
@@ -115,7 +132,11 @@ public class Worker : BackgroundService
                 a.Subject.Title == parsed.SubjectTitle,
                 ct);
 
-        if (assignment == null) return;
+        if (assignment == null)
+        {
+            _logger.LogWarning("Задание не найдено!");
+            return;
+        }
 
         foreach (var attachment in message.Attachments.OfType<MimePart>())
         {
