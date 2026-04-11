@@ -9,4 +9,6 @@ public interface ISubmissionService
     Task<List<SubmissionSummaryDto>> GetAllSubmissionsAsync();
     Task<Submission?> GetSubmissionByIdAsync(Guid id);
     Task SubmitReviewAsync(Guid submissionId, Review review, SubmissionStatus newStatus);
+    Task<string> GetDownloadUrlAsync(Guid historyId);
+    Task DeleteSubmissionAsync(Guid id);
 }
