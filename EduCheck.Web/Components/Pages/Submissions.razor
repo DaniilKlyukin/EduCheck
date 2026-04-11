@@ -1,10 +1,17 @@
 ﻿@page "/submissions"
-@using EduCheck.Core.Common
 @using EduCheck.Core.DTOs
 @using EduCheck.Core.Enums
 @using EduCheck.Core.Interfaces
+@using EduCheck.Web.Interfaces
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
 @inject ISubmissionService SubmissionService
 @inject NavigationManager Nav
+@inject ISubmissionStatusLabelProvider StatusLabelProvider
+@inject ISubmissionStatusStyleProvider StatusStyleProvider
+
+<PageTitle>Работы</PageTitle>
 
 <h3>Все работы</h3>
 
@@ -17,7 +24,7 @@
             <option value="">Все статусы</option>
             @foreach (var status in Enum.GetValues<SubmissionStatus>())
             {
-                <option value="@status">@status.GetDisplayName()</option>
+                <option value="@status">@StatusLabelProvider.GetDisplayName(status)</option>
             }
         </select>
     </div>
@@ -48,9 +55,20 @@
                 <td>@sub.Group</td>
                 <td>@sub.SubjectTitle / @sub.AssignmentTitle</td>
                 <td>v@(sub.Version)</td>
-                <td><span class="badge bg-info">@sub.Status.GetDisplayName()</span></td>
                 <td>
-                    <button class="btn btn-sm btn-primary" @onclick="() => Nav.NavigateTo($" /review/{sub.Id}")">Проверить</button>
+                    <span class="badge rounded-pill @StatusStyleProvider.GetBadgeClass(sub.Status)">
+                        @StatusLabelProvider.GetDisplayName(sub.Status)
+                    </span>
+                </td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-primary" @onclick='() => Nav.NavigateTo($"/review/{sub.Id}")'>
+                            Проверить
+                        </button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteSubmission(sub)">
+                            Удалить
+                        </button>
+                    </div>
                 </td>
             </tr>
         }
@@ -73,4 +91,15 @@
         .Where(s => filterStatus == null || s.Status == filterStatus)
         .Where(s => !onlyLate || s.HasLateUpload);
 
+    private async Task DeleteSubmission(SubmissionSummaryDto submission)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Вы уверены, что хотите удалить работу студента {submission.StudentName}?");
+        
+        if (confirmed)
+        {
+            await SubmissionService.DeleteSubmissionAsync(submission.Id);
+            
+            submissions.Remove(submission);
+        }
+    }
 }

@@ -1,0 +1,238 @@
+﻿@page "/subject/{Id:guid}"
+@using EduCheck.Core.Entities
+@using EduCheck.Core.Interfaces
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@inject ISubjectService SubjectService
+@inject NavigationManager Nav
+@inject IJSRuntime JSRuntime
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+<PageTitle>Детали предмета</PageTitle>
+
+@if (subject == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/subjects">Предметы</a></li>
+            <li class="breadcrumb-item active">@subject.Title</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3>@subject.Title</h3>
+            <span class="badge bg-secondary">Семестр @subject.Semester</span>
+        </div>
+        <button class="btn btn-success" @onclick="() => showAddModal = true">+ Добавить задание</button>
+    </div>
+
+    <h4>Список заданий</h4>
+    @if (!subject.Assignments.Any())
+    {
+        <div class="alert alert-info">В этом предмете еще нет ни одного задания.</div>
+    }
+    else
+    {
+        <div class="list-group">
+            @foreach (var assignment in subject.Assignments.OrderBy(a => a.Deadline))
+            {
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-1">@assignment.Title</h5>
+                        <small class="text-muted">Дедлайн: @assignment.Deadline.ToLocalTime().ToString("g")</small>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-info" @onclick="() => ShowDebtors(assignment)">Должники</button>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="() => EditAssignment(assignment)">Правка</button>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAssignment(assignment.Id)">Удалить</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-light">
+            <strong>Группы, изучающие предмет</strong>
+        </div>
+        <div class="card-body">
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                @foreach (var tg in subject.TargetGroups)
+                {
+                    <span class="badge bg-info p-2">
+                        @tg.GroupName
+                        <button class="btn-close btn-close-white ms-2" style="font-size: 0.5rem;" @onclick="() => RemoveGroup(tg.Id)"></button>
+                    </span>
+                }
+            </div>
+            <div class="input-group mb-3" style="max-width: 300px;">
+                <input @bind="newGroupName" class="form-control" placeholder="Название группы..." @onkeyup="@(e => e.Key == "Enter" ? AddGroup() : null)" />
+                <button class="btn btn-primary" @onclick="AddGroup">Добавить</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showAddModal)
+{
+    <div class="modal show d-block" style="background: rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5>Задание</h5></div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Название (например, Лабораторная №1)</label>
+                        <input @bind="newAssignment.Title" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Крайний срок (Дедлайн)</label>
+                        <input type="datetime-local"
+                               @bind="newAssignment.Deadline"
+                               class="form-control" />
+                        <div class="form-text">Выберите дату и время, после которых работы будут считаться просроченными.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => showAddModal = false">Отмена</button>
+                    <button class="btn btn-primary" @onclick="AddAssignment">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showDebtorsModal)
+{
+    <div class="modal show d-block" style="background: rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Не сдали работу: @selectedAssignment?.Title</h5>
+                    <button class="btn-close" @onclick="() => showDebtorsModal = false"></button>
+                </div>
+                <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+                    @if (debtors == null)
+                    {
+                        <p>Загрузка...</p>
+                    }
+                    else if (!debtors.Any())
+                    {
+
+                        <p class="text-success">Все студенты сдали работу!</p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm">
+                            <thead><tr><th>Группа</th><th>ФИО</th><th>Email</th></tr></thead>
+                            <tbody>
+                                @foreach (var d in debtors)
+                                {
+                                    <tr><td>@d.Group</td><td>@d.Name</td><td>@d.Email</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => showDebtorsModal = false">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private Subject? subject;
+    private bool showAddModal;
+    private Assignment newAssignment = new()
+    {
+        Deadline = DateTime.Today.AddDays(7).AddHours(23).AddMinutes(59)
+    };
+    private bool showDebtorsModal;
+    private bool isAssignmentEditMode;
+    private Assignment? selectedAssignment;
+    private List<Student>? debtors;
+    private string newGroupName = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        subject = await SubjectService.GetSubjectByIdAsync(Id);
+    }
+
+    private async Task AddAssignment()
+    {
+        if (string.IsNullOrWhiteSpace(newAssignment.Title)) return;
+
+        newAssignment.Deadline = newAssignment.Deadline.ToUniversalTime();
+
+        if (isAssignmentEditMode)
+            await SubjectService.UpdateAssignmentAsync(newAssignment);
+        else
+            await SubjectService.AddAssignmentAsync(Id, newAssignment);
+
+        showAddModal = false;
+        isAssignmentEditMode = false;
+        newAssignment = new() { Deadline = DateTime.Now.AddDays(7) };
+        await LoadData();
+    }
+
+    private async Task DeleteAssignment(Guid assignmentId)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+            "Вы действительно хотите удалить это задание? Все связанные работы студентов будут безвозвратно удалены.");
+
+        if (confirmed)
+        {
+            await SubjectService.DeleteAssignmentAsync(assignmentId);
+            await LoadData();
+        }
+    }
+    
+    private void EditAssignment(Assignment a)
+    {
+        newAssignment = new Assignment
+        {
+            Id = a.Id,
+            Title = a.Title,
+            Deadline = a.Deadline.ToLocalTime(),
+            SubjectId = a.SubjectId
+        };
+        isAssignmentEditMode = true;
+        showAddModal = true;
+    }
+
+    private async Task ShowDebtors(Assignment a)
+    {
+        selectedAssignment = a;
+        debtors = null;
+        showDebtorsModal = true;
+        debtors = await SubjectService.GetDebtorsAsync(a.Id);
+    }
+
+    private async Task AddGroup()
+    {
+        if (string.IsNullOrWhiteSpace(newGroupName)) return;
+        
+        await SubjectService.AddTargetGroupAsync(Id, newGroupName);
+        newGroupName = "";
+        await LoadData();
+    }
+
+    private async Task RemoveGroup(Guid targetGroupId)
+    {
+        await SubjectService.RemoveTargetGroupAsync(targetGroupId);
+        await LoadData();
+    }
+}

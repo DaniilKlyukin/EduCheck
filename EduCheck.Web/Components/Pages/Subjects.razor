@@ -3,8 +3,12 @@
 @using EduCheck.Core.Entities
 @using EduCheck.Core.Interfaces
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
 @using static Microsoft.AspNetCore.Components.Web.RenderMode
 @inject ISubjectService SubjectService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Предметы</PageTitle>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h3>Учебные предметы</h3>
@@ -20,9 +24,10 @@
                     <h5 class="card-title">@subject.Title</h5>
                     <h6 class="card-subtitle mb-2 text-muted">Семестр: @subject.Semester</h6>
                     <p class="card-text">Заданий: @subject.Assignments.Count</p>
-                    <div class="btn-group w-100">
-                        <a href="/subject/@subject.Id" class="btn btn-outline-primary">Управление</a>
-                        <button class="btn btn-outline-danger" @onclick="() => DeleteSubject(subject.Id)">Удалить</button>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="/subject/@subject.Id" class="btn btn-sm btn-outline-primary flex-fill">Управление</a>
+                        <button class="btn btn-sm btn-outline-danger flex-fill" @onclick="() => DeleteSubject(subject.Id)">Удалить</button>
+                        <button class="btn btn-sm btn-outline-primary flex-fill" @onclick="() => EditSubject(subject)">Редактировать</button>
                     </div>
                 </div>
             </div>
@@ -36,7 +41,7 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Новый предмет</h5>
+                    <h5 class="modal-title">@(isEditMode ? "Редактировать предмет" : "Новый предмет")</h5>
                     <button type="button" class="btn-close" @onclick="() => showCreateModal = false"></button>
                 </div>
                 <div class="modal-body">
@@ -60,7 +65,7 @@
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="() => showCreateModal = false">Отмена</button>
-                    <button class="btn btn-primary" @onclick="SaveSubject">Сохранить предмет</button>
+                    <button class="btn btn-primary" @onclick="SaveSubject">Сохранить</button>
                 </div>
             </div>
         </div>
@@ -71,32 +76,45 @@
     private bool showCreateModal;
     private List<Subject> subjects = new();
     private Subject newSubject = new();
+    private bool isEditMode;
 
     protected override async Task OnInitializedAsync()
     {
         subjects = await SubjectService.GetAllSubjectsAsync();
     }
 
+    private void EditSubject(Subject s)
+    {
+        newSubject = new Subject { Id = s.Id, Title = s.Title, Semester = s.Semester };
+        isEditMode = true;
+        showCreateModal = true;
+    }
+
     private async Task DeleteSubject(Guid id)
     {
-        await SubjectService.DeleteSubjectAsync(id);
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+            "Вы действительно хотите удалить этот предмет? Все связанные работы студентов будут безвозвратно удалены.");
 
-        subjects = await SubjectService.GetAllSubjectsAsync();
+        if (confirmed)
+        {
+            await SubjectService.DeleteSubjectAsync(id);
+
+            subjects = await SubjectService.GetAllSubjectsAsync();
+        }
     }
 
     private async Task SaveSubject()
     {
-        if (string.IsNullOrWhiteSpace(newSubject.Title) || newSubject.Semester <= 0)
-        {
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(newSubject.Title)) return;
 
-        await SubjectService.CreateSubjectAsync(newSubject);
-
-        newSubject = new();
+        if (isEditMode)
+            await SubjectService.UpdateSubjectAsync(newSubject);
+        else
+            await SubjectService.CreateSubjectAsync(newSubject);
 
         showCreateModal = false;
-
+        isEditMode = false;
+        newSubject = new();
         subjects = await SubjectService.GetAllSubjectsAsync();
     }
 }
