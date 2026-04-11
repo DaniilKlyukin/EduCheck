@@ -68,6 +68,8 @@ namespace EduCheck.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SubmissionId");
+
                     b.ToTable("Reviews");
                 });
 
@@ -115,7 +117,30 @@ namespace EduCheck.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Title")
+                        .IsUnique();
+
                     b.ToTable("Subjects");
+                });
+
+            modelBuilder.Entity("EduCheck.Core.Entities.SubjectTargetGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("GroupName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubjectId");
+
+                    b.ToTable("TargetGroups");
                 });
 
             modelBuilder.Entity("EduCheck.Core.Entities.Submission", b =>
@@ -207,6 +232,28 @@ namespace EduCheck.Infrastructure.Data.Migrations
                     b.Navigation("Subject");
                 });
 
+            modelBuilder.Entity("EduCheck.Core.Entities.Review", b =>
+                {
+                    b.HasOne("EduCheck.Core.Entities.Submission", "Submission")
+                        .WithMany("Reviews")
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Submission");
+                });
+
+            modelBuilder.Entity("EduCheck.Core.Entities.SubjectTargetGroup", b =>
+                {
+                    b.HasOne("EduCheck.Core.Entities.Subject", "Subject")
+                        .WithMany("TargetGroups")
+                        .HasForeignKey("SubjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Subject");
+                });
+
             modelBuilder.Entity("EduCheck.Core.Entities.Submission", b =>
                 {
                     b.HasOne("EduCheck.Core.Entities.Assignment", "Assignment")
@@ -238,11 +285,15 @@ namespace EduCheck.Infrastructure.Data.Migrations
             modelBuilder.Entity("EduCheck.Core.Entities.Subject", b =>
                 {
                     b.Navigation("Assignments");
+
+                    b.Navigation("TargetGroups");
                 });
 
             modelBuilder.Entity("EduCheck.Core.Entities.Submission", b =>
                 {
                     b.Navigation("History");
+
+                    b.Navigation("Reviews");
                 });
 #pragma warning restore 612, 618
         }
