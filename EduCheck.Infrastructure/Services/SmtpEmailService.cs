@@ -5,18 +5,11 @@ using MimeKit;
 
 namespace EduCheck.Infrastructure.Services;
 
-public class SmtpEmailService : IEmailService
+public class SmtpEmailService(IConfiguration config) : IEmailService
 {
-    private readonly IConfiguration _config;
-
-    public SmtpEmailService(IConfiguration config)
-    {
-        _config = config;
-    }
-
     public async Task SendFeedbackAsync(string toEmail, string subject, string body)
     {
-        var settings = _config.GetSection("EmailSettings");
+        var settings = config.GetSection("EmailSettings");
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress("EduCheck Bot", settings["Email"]));
         message.To.Add(new MailboxAddress("", toEmail));

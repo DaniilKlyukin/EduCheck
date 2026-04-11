@@ -6,7 +6,7 @@ namespace EduCheck.Infrastructure.Services;
 public class EmailParser : IEmailParser
 {
     private static readonly Regex _subjectRegex =
-        new Regex(@"^\[(?<subject>.+)\]\[(?<group>.+)\]\s+(?<assignment>.+)$",
+        new Regex(@"^\[(?<subject>.+)\]\[(?<group>.+)\]\[(?<assignment>.+)\]$",
             RegexOptions.Compiled);
 
     public ParsedEmail? Parse(string subject)

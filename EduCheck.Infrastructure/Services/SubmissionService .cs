@@ -1,5 +1,4 @@
-﻿using EduCheck.Core.Common;
-using EduCheck.Core.DTOs;
+﻿using EduCheck.Core.DTOs;
 using EduCheck.Core.Entities;
 using EduCheck.Core.Enums;
 using EduCheck.Core.Interfaces;
@@ -8,38 +7,60 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EduCheck.Infrastructure.Services;
 
-public class SubmissionService : ISubmissionService
+public class SubmissionService(
+    IDbContextFactory<AppDbContext> dbFactory,
+    IEmailService emailService,
+    IFileStorage fileStorage,
+    ISubmissionStatusLabelProvider statusLabelProvider) : ISubmissionService
 {
-    private readonly IDbContextFactory<AppDbContext> _dbFactory;
-    private readonly IEmailService _emailService;
-
-    public SubmissionService(IDbContextFactory<AppDbContext> dbFactory, IEmailService emailService)
+    public async Task DeleteSubmissionAsync(Guid id)
     {
-        _dbFactory = dbFactory;
-        _emailService = emailService;
+        using var db = await dbFactory.CreateDbContextAsync();
+
+        var submission = await db.Submissions.FindAsync(id);
+
+        if (submission == null)
+            return;
+
+        db.Submissions.Remove(submission);
+
+        await db.SaveChangesAsync();
     }
 
     public async Task<List<SubmissionSummaryDto>> GetAllSubmissionsAsync()
     {
-        using var db = await _dbFactory.CreateDbContextAsync();
+        using var db = await dbFactory.CreateDbContextAsync();
         return await db.Submissions
             .Select(s => new SubmissionSummaryDto(
                 s.Id,
-                db.Students.First(st => st.Id == s.StudentId).Name,
-                db.Students.First(st => st.Id == s.StudentId).Group,
-                db.Assignments.Include(a => a.Subject).First(a => a.Id == s.AssignmentId).Subject.Title,
-                db.Assignments.First(a => a.Id == s.AssignmentId).Title,
+                s.Student.Name,
+                s.Student.Group,
+                s.Assignment.Subject.Title,
+                s.Assignment.Title,
                 s.CurrentVersion,
                 s.Status,
                 s.HasLateUpload
             )).ToListAsync();
     }
 
+    public async Task<string> GetDownloadUrlAsync(Guid historyId)
+    {
+        using var db = await dbFactory.CreateDbContextAsync();
+
+        var history = await db.SubmissionHistory.FindAsync(historyId);
+
+        if (history == null)
+            throw new Exception("История не найдена!");
+
+        return await fileStorage.GetDownloadUrlAsync(history.FileStoragePath, history.FileName);
+    }
+
     public async Task<Submission?> GetSubmissionByIdAsync(Guid id)
     {
-        using var db = await _dbFactory.CreateDbContextAsync();
+        using var db = await dbFactory.CreateDbContextAsync();
         return await db.Submissions
             .Include(s => s.History)
+            .Include(s => s.Reviews)
             .Include(s => s.Student)
             .Include(s => s.Assignment)
                 .ThenInclude(a => a.Subject)
@@ -48,7 +69,7 @@ public class SubmissionService : ISubmissionService
 
     public async Task SubmitReviewAsync(Guid submissionId, Review review, SubmissionStatus newStatus)
     {
-        using var db = await _dbFactory.CreateDbContextAsync();
+        using var db = await dbFactory.CreateDbContextAsync();
 
         var submission = await db.Submissions
             .Include(s => s.Student)
@@ -68,10 +89,10 @@ public class SubmissionService : ISubmissionService
         await db.SaveChangesAsync();
 
         var body = $"Ваша работа по предмету {submission.Assignment.Subject.Title} проверена.\n" +
-                   $"Статус: {newStatus.GetDisplayName()}\n" +
+                   $"Статус: {statusLabelProvider.GetDisplayName(submission.Status)}\n" +
                    $"Оценка: {review.Grade}\n" +
                    $"Комментарий: {review.TeacherComment}";
 
-        await _emailService.SendFeedbackAsync(submission.Student.Email, "Результат проверки", body);
+        await emailService.SendFeedbackAsync(submission.Student.Email, "Результат проверки", body);
     }
 }

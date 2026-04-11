@@ -1,5 +1,6 @@
 ﻿using EduCheck.Core.Interfaces;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Minio;
 using Minio.DataModel.Args;
 
@@ -8,11 +9,16 @@ namespace EduCheck.Infrastructure.Services;
 public class MinioFileStorage : IFileStorage
 {
     private readonly IMinioClient _minioClient;
+    private readonly ILogger<MinioFileStorage> _logger;
     private readonly string _bucketName;
 
-    public MinioFileStorage(IMinioClient minioClient, IConfiguration config)
+    public MinioFileStorage(
+        IMinioClient minioClient, 
+        IConfiguration config,
+        ILogger<MinioFileStorage> logger)
     {
         _minioClient = minioClient;
+        _logger = logger;
         _bucketName = config["StorageSettings:BucketName"] ?? "submissions";
     }
 
@@ -39,6 +45,30 @@ public class MinioFileStorage : IFileStorage
         ms.Position = 0;
 
         return ms;
+    }
+
+    public async Task<string> GetDownloadUrlAsync(string path, string fileName)
+    {
+        try
+        {
+            int expirySeconds = (int)TimeSpan.FromHours(1).TotalSeconds;
+
+            var args = new PresignedGetObjectArgs()
+                .WithBucket(_bucketName)
+                .WithObject(path)
+                .WithExpiry(expirySeconds)
+                .WithHeaders(new Dictionary<string, string>
+                {
+                { "response-content-disposition", $"attachment; filename=\"{fileName}\"" }
+                });
+
+            return await _minioClient.PresignedGetObjectAsync(args);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Ошибка генерации ссылки для файла {path}");
+            throw;
+        }
     }
 
     public async Task<string> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken ct = default)
