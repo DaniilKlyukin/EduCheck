@@ -37,4 +37,6 @@ public class Submission
     /// Полная история загруженных файлов и их метаданных.
     /// </summary>
     public List<SubmissionHistory> History { get; set; } = new();
+
+    public List<Review> Reviews { get; set; } = new();
 }
