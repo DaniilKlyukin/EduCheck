@@ -8,6 +8,8 @@ public class Review
     public Guid Id { get; set; }
     public Guid SubmissionId { get; set; }
 
+    public Submission Submission { get; set; } = null!;
+
     /// <summary>
     /// Указывает, какая именно версия работы была оценена данным ревью.
     /// </summary>
