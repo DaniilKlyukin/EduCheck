@@ -12,6 +12,14 @@ public class SubmissionConfiguration : IEntityTypeConfiguration<Submission>
 
         builder.HasIndex(s => new { s.StudentId, s.AssignmentId }).IsUnique();
 
+        builder.HasOne(s => s.Student)
+            .WithMany()
+            .HasForeignKey(s => s.StudentId);
+
+        builder.HasOne(s => s.Assignment)
+            .WithMany()
+            .HasForeignKey(s => s.AssignmentId);
+
         builder.HasMany(s => s.History)
             .WithOne()
             .HasForeignKey(h => h.SubmissionId)
