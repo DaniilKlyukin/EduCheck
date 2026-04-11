@@ -9,6 +9,12 @@ public static class DependencyInjection
     {
         services.AddScoped<IEmailParser, EmailParser>();
         services.AddScoped<IFileStorage, MinioFileStorage>();
+        services.AddScoped<IStudentService, StudentService>();
         services.AddScoped<ICodeAnalyzer, RoslynCodeAnalyzer>();
+        services.AddHttpClient<IAiCodeReviewer, OllamaCodeReviewer>(client =>
+        {
+            client.BaseAddress = new Uri("http://localhost:11434/");
+            client.Timeout = TimeSpan.FromMinutes(10);
+        });
     }
 }
