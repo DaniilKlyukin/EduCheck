@@ -17,4 +17,6 @@ public class Subject
     /// Список заданий (лабораторных, курсовых), входящих в данный предмет.
     /// </summary>
     public List<Assignment> Assignments { get; set; } = new();
+
+    public List<SubjectTargetGroup> TargetGroups { get; set; } = new();
 }

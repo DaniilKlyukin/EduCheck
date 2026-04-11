@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<Review> Reviews { get; set; }
     public DbSet<Student> Students { get; set; }
     public DbSet<Subject> Subjects { get; set; }
+    public DbSet<SubjectTargetGroup> TargetGroups { get; set; }
     public DbSet<Submission> Submissions { get; set; }
     public DbSet<SubmissionHistory> SubmissionHistory { get; set; }
 
