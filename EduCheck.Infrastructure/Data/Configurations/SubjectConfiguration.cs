@@ -1,27 +1,29 @@
-﻿using EduCheck.Core.Entities;
-using EduCheck.Core.ValueObjects;
+﻿using EduCheck.Core.Domain.Aggregates;
+using EduCheck.Core.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace EduCheck.Infrastructure.Data.Configurations;
 
-public class SubjectConfiguration : IEntityTypeConfiguration<Subject>
+public class SubjectConfiguration : IEntityTypeConfiguration<SubjectAggregate>
 {
-    public void Configure(EntityTypeBuilder<Subject> builder)
+    public void Configure(EntityTypeBuilder<SubjectAggregate> builder)
     {
+        builder.ToTable("Subjects");
         builder.HasKey(s => s.Id);
-        builder.HasIndex(s => new { s.Title, s.Semester }).IsUnique();
 
         builder.Property(s => s.Title)
-            .HasConversion(v => v.Value, v => new SubjectTitle(v))
+            .HasConversion(v => v.Value, v => SubjectTitle.Create(v).Value)
             .HasColumnType("citext")
             .IsRequired();
 
-        builder.Metadata.FindNavigation(nameof(Subject.Assignments))!
-            .SetPropertyAccessMode(PropertyAccessMode.Field);
+        builder.Property(s => s.Semester).IsRequired();
 
-        builder.Metadata.FindNavigation(nameof(Subject.TargetGroups))!
-            .SetPropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation(s => s.Assignments)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.Navigation(s => s.TargetGroups)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasMany(s => s.Assignments)
             .WithOne()
@@ -32,5 +34,7 @@ public class SubjectConfiguration : IEntityTypeConfiguration<Subject>
             .WithOne()
             .HasForeignKey(tg => tg.SubjectId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(s => new { s.Title, s.Semester }).IsUnique();
     }
 }

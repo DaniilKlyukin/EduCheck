@@ -1,4 +1,4 @@
-﻿using EduCheck.Core.Enums;
+﻿using EduCheck.Core.Domain.Enums;
 
 namespace EduCheck.Web.Interfaces;
 

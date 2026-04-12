@@ -1,58 +1,88 @@
 ﻿@page "/subjects"
-@using EduCheck.Core.Entities
-@using EduCheck.Core.Interfaces
+@using EduCheck.Application.Interfaces
+@using EduCheck.Core.Domain.Aggregates
+@using EduCheck.Core.Primitives
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @inject ISubjectService SubjectService
 @inject IJSRuntime JSRuntime
 
-<PageTitle>Предметы</PageTitle>
+<PageTitle>Предметы - EduCheck</PageTitle>
 
-<div class="d-flex justify-content-between mb-4">
-    <h3>Предметы</h3>
-    <button class="btn btn-primary" @onclick="() => OpenModal(null)">Добавить предмет</button>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Учебные дисциплины</h1>
+    <button class="btn btn-primary shadow-sm" @onclick="() => OpenModal(null)">
+        <i class="bi bi-plus-lg me-2"></i>Добавить предмет
+    </button>
 </div>
 
-<div class="row">
-    @foreach (var s in subjects)
-    {
-        <div class="col-md-4 mb-3">
-            <div class="card p-3 shadow-sm">
-                <h5>@s.Title</h5>
-                <p>Семестр: @s.Semester</p>
-                <div class="d-flex flex-wrap gap-2 mt-auto pt-3">
-                    <a href="/subject/@s.Id" class="btn btn-sm btn-info text-white">
-                        <i class="bi bi-gear-fill me-1"></i>Управление
-                    </a>
-                    <button class="btn btn-sm btn-warning" @onclick="() => OpenModal(s)">
-                        <i class="bi bi-pencil-square me-1"></i>Правка
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSubject(s.Id)">
-                        <i class="bi bi-trash-fill me-1"></i>Удалить
-                    </button>
+@if (_isLoading)
+{
+    <div class="text-center my-5">
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+}
+else
+{
+    <div class="row">
+        @foreach (var s in _subjects)
+        {
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="card-title fw-bold">@s.Title.Value</h5>
+                            <span class="badge bg-info-subtle text-info border border-info-subtle">@s.Semester семестр</span>
+                        </div>
+                        
+                        <div class="mt-auto pt-4 d-flex gap-2">
+                            <a href="/subject/@s.Id" class="btn btn-sm btn-outline-primary flex-grow-1">
+                                <i class="bi bi-gear-fill me-1"></i>Настроить
+                            </a>
+                            <button class="btn btn-sm btn-light" @onclick="() => OpenModal(s)" title="Редактировать">
+                                <i class="bi bi-pencil-square"></i>Редактировать
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSubject(s.Id)" title="Удалить">
+                                <i class="bi bi-trash-fill"></i>Удалить
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-    }
-</div>
+        }
+    </div>
+}
 
-@if (showModal)
+@if (_showModal)
 {
-    <div class="modal show d-block" style="background: rgba(0,0,0,0.5)">
-        <div class="modal-dialog">
-            <div class="modal-content p-4">
-                <div class="modal-header"><h5>Предмет</h5></div>
-                <div class="mb-3">
-                    <label>Название</label>
-                    <input @bind="form.Title" class="form-control" />
+    <div class="modal show d-block" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">@(_form.Id == null ? "Новый предмет" : "Редактирование")</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showModal = false"></button>
                 </div>
-                <div class="mb-3">
-                    <label>Семестр</label>
-                    <input @bind="form.Semester" type="number" class="form-control" />
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(_modalError))
+                    {
+                        <div class="alert alert-danger py-2 small mb-3">
+                            <i class="bi bi-exclamation-circle me-2"></i>@_modalError
+                        </div>
+                    }
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Название дисциплины</label>
+                        <input @bind="_form.Title" class="form-control" placeholder="Например: Программирование на C#" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Семестр</label>
+                        <input @bind="_form.Semester" type="number" class="form-control" min="1" max="12" />
+                    </div>
                 </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-primary" @onclick="Save">Сохранить</button>
-                    <button class="btn btn-secondary" @onclick="() => showModal = false">Отмена</button>
+                <div class="modal-footer bg-light">
+                    <button class="btn btn-secondary btn-sm" @onclick="() => _showModal = false">Отмена</button>
+                    <button class="btn btn-primary btn-sm px-4" @onclick="Save">
+                        @(_isSaving ? "Сохранение..." : "Сохранить")
+                    </button>
                 </div>
             </div>
         </div>
@@ -60,9 +90,12 @@
 }
 
 @code {
-    private List<Subject> subjects = new();
-    private bool showModal;
-    private SubjectFormModel form = new();
+    private List<SubjectAggregate> _subjects = new();
+    private bool _showModal;
+    private bool _isLoading = true;
+    private bool _isSaving = false;
+    private string? _modalError;
+    private SubjectFormModel _form = new();
 
     public class SubjectFormModel
     {
@@ -73,34 +106,86 @@
 
     protected override async Task OnInitializedAsync() => await Load();
 
-    private async Task Load() => subjects = await SubjectService.GetAllSubjectsAsync();
-
-    private void OpenModal(Subject? s)
+    private async Task Load()
     {
-        if (s == null) form = new SubjectFormModel();
-        else form = new SubjectFormModel { Id = s.Id, Title = s.Title.ToString(), Semester = s.Semester };
-        showModal = true;
+        _isLoading = true;
+        var result = await SubjectService.GetAllSubjectsAsync();
+        if (result.IsSuccess)
+        {
+            _subjects = result.Value.OrderBy(s => s.Semester).ThenBy(s => s.Title.Value).ToList();
+        }
+        _isLoading = false;
+    }
+
+    private void OpenModal(SubjectAggregate? s)
+    {
+        _modalError = null;
+        if (s == null)
+        {
+            _form = new SubjectFormModel();
+        }
+        else
+        {
+            _form = new SubjectFormModel
+            {
+                Id = s.Id,
+                Title = s.Title.Value,
+                Semester = s.Semester
+            };
+        }
+        _showModal = true;
     }
 
     private async Task Save()
     {
-        if (string.IsNullOrWhiteSpace(form.Title)) return;
+        if (string.IsNullOrWhiteSpace(_form.Title))
+        {
+            _modalError = "Укажите название предмета";
+            return;
+        }
 
-        if (form.Id == null)
-            await SubjectService.CreateSubjectAsync(form.Title, form.Semester);
+        _isSaving = true;
+        _modalError = null;
+        Result result;
+
+        if (_form.Id == null)
+        {
+            var createRes = await SubjectService.CreateSubjectAsync(_form.Title, _form.Semester);
+            result = createRes;
+        }
         else
-            await SubjectService.UpdateSubjectAsync(form.Id.Value, form.Title, form.Semester);
+        {
+            result = await SubjectService.UpdateSubjectAsync(_form.Id.Value, _form.Title, _form.Semester);
+        }
+
+        if (result.IsSuccess)
+        {
+            _showModal = false;
+            await Load();
+        }
+        else
+        {
+            _modalError = result.Error.Message;
+        }
         
-        showModal = false;
-        await Load();
+        _isSaving = false;
     }
 
     private async Task DeleteSubject(Guid id)
     {
-        if (await JSRuntime.InvokeAsync<bool>("confirm", "Удалить предмет со всеми заданиями и работами?"))
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Внимание! Удаление предмета приведет к удалению всех связанных заданий и студенческих работ. Продолжить?");
+        
+        if (confirmed)
         {
-            await SubjectService.DeleteSubjectAsync(id);
-            await Load();
+            var result = await SubjectService.DeleteSubjectAsync(id);
+            if (result.IsSuccess)
+            {
+                await Load();
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"Ошибка удаления: {result.Error.Message}");
+            }
         }
     }
 }

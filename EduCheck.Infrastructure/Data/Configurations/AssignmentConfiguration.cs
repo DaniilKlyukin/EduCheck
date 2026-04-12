@@ -1,5 +1,6 @@
-﻿using EduCheck.Core.Entities;
-using EduCheck.Core.ValueObjects;
+﻿using EduCheck.Core.Domain.Aggregates;
+using EduCheck.Core.Domain.Entities;
+using EduCheck.Core.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -9,15 +10,17 @@ public class AssignmentConfiguration : IEntityTypeConfiguration<Assignment>
 {
     public void Configure(EntityTypeBuilder<Assignment> builder)
     {
+        builder.ToTable("Assignments");
         builder.HasKey(a => a.Id);
 
         builder.Property(a => a.Title)
-            .HasConversion(v => v.Value, v => new AssignmentTitle(v))
-            .HasColumnType("citext")
-            .HasMaxLength(250)
+            .HasConversion(v => v.Value, v => AssignmentTitle.Create(v).Value)
             .IsRequired();
 
-        builder.HasOne<Subject>()
+        builder.Property(a => a.Deadline)
+            .IsRequired();
+
+        builder.HasOne<SubjectAggregate>()
             .WithMany(s => s.Assignments)
             .HasForeignKey(a => a.SubjectId)
             .OnDelete(DeleteBehavior.Cascade);

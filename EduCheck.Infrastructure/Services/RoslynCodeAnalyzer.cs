@@ -1,13 +1,16 @@
-﻿using EduCheck.Core.Interfaces;
+﻿using EduCheck.Core.Domain.Interfaces;
+using EduCheck.Core.Primitives;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.Extensions.Logging;
 using SharpCompress.Archives;
 using System.Collections.Immutable;
 using System.Text;
 
 namespace EduCheck.Infrastructure.Services;
 
-public sealed class RoslynCodeAnalyzer : ICodeAnalyzer
+public sealed class RoslynCodeAnalyzer(
+    ILogger<OllamaCodeReviewer> logger) : ICodeAnalyzer
 {
     private static readonly ImmutableHashSet<string> ExcludedPathSegments =
         ImmutableHashSet.CreateRange(StringComparer.OrdinalIgnoreCase, ["obj", "bin", "Properties", ".vs", ".git"]);
@@ -23,7 +26,7 @@ public sealed class RoslynCodeAnalyzer : ICodeAnalyzer
         global using global::System.Text;
     ";
 
-    public async Task<string> AnalyzeZipAsync(Stream zipStream, CancellationToken ct = default)
+    public async Task<Result<string>> AnalyzeZipAsync(Stream zipStream, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(zipStream);
         var syntaxTrees = new List<SyntaxTree>();
@@ -35,7 +38,8 @@ public sealed class RoslynCodeAnalyzer : ICodeAnalyzer
             await using var archive = await ArchiveFactory.OpenAsyncArchive(zipStream);
             await foreach (var entry in archive.EntriesAsync.Where(e => !e.IsDirectory))
             {
-                if (!IsEligibleSourceFile(entry.Key)) continue;
+                if (!IsEligibleSourceFile(entry.Key))
+                    continue;
 
                 using var entryStream = entry.OpenEntryStream();
                 using var reader = new StreamReader(entryStream, Encoding.UTF8);
@@ -46,11 +50,15 @@ public sealed class RoslynCodeAnalyzer : ICodeAnalyzer
         }
         catch (Exception ex)
         {
-            return $"Ошибка обработки архива: {ex.Message}";
+            logger.LogError(ex, "RoslynCodeAnalyzer error");
+            return Result.Failure<string>("RoslynCodeAnalyzer.ZipError", $"Ошибка обработки архива: {ex.Message}");
         }
 
-        if (syntaxTrees.Count <= 1)
-            return "Анализ пропущен: файлы C# не найдены.";
+        if (syntaxTrees.Count == 0)
+        {
+            logger.LogWarning("Анализ пропущен: файлы C# не найдены.");
+            return Result.Failure<string>("RoslynCodeAnalyzer.Empty", $"Анализ пропущен: файлы C# не найдены.");
+        }
 
         return PerformCompilationAnalysis(syntaxTrees);
     }

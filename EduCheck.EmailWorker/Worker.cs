@@ -1,6 +1,9 @@
-using EduCheck.Core.Contracts;
-using EduCheck.Core.Entities;
-using EduCheck.Core.Interfaces;
+using EduCheck.Application.Contracts;
+using EduCheck.Application.Interfaces;
+using EduCheck.Core.Domain.Aggregates;
+using EduCheck.Core.Domain.Interfaces;
+using EduCheck.Core.Domain.ValueObjects;
+using EduCheck.Core.Primitives;
 using EduCheck.Infrastructure.Data;
 using MailKit;
 using MailKit.Net.Imap;
@@ -12,9 +15,6 @@ using Polly;
 using Polly.Retry;
 using System.IO.Compression;
 using System.Security.Cryptography;
-using System.Text;
-
-namespace EduCheck.EmailWorker;
 
 public class Worker(
     ILogger<Worker> logger,
@@ -28,7 +28,7 @@ public class Worker(
         .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
             (ex, time, retryCount, context) =>
             {
-                logger.LogWarning($"Ошибка внешней службы. Попытка {retryCount}. Ждем {time.TotalSeconds}с. Ошибка: {ex.Message}");
+                logger.LogWarning($"Ошибка инфраструктуры. Попытка {retryCount}. Ждем {time.TotalSeconds}с. Ошибка: {ex.Message}");
             });
 
     private readonly long _maxFileSizeBytes = config.GetValue("EmailSettings:MaxAttachmentSizeMb", 25) * 1024 * 1024;
@@ -39,14 +39,8 @@ public class Worker(
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            try
-            {
-                await ProcessEmailsAsync(stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Ошибка при выполнении цикла воркера");
-            }
+            try { await ProcessEmailsAsync(stoppingToken); }
+            catch (Exception ex) { logger.LogError(ex, "Ошибка в цикле воркера"); }
 
             await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), stoppingToken);
         }
@@ -65,149 +59,106 @@ public class Worker(
 
         foreach (var uid in uids)
         {
-            try
-            {
-                var message = await client.Inbox.GetMessageAsync(uid, ct);
-                using var scope = scopeFactory.CreateScope();
-                var parser = scope.ServiceProvider.GetRequiredService<IEmailParser>();
-                var parsed = message.Subject != null ? parser.Parse(message.Subject) : null;
+            using var scope = scopeFactory.CreateScope();
+            var parser = scope.ServiceProvider.GetRequiredService<IEmailParser>();
 
-                if (parsed == null)
-                {
-                    logger.LogWarning($"Формат темы не распознан: {message.Subject}");
-                }
-                else
-                {
-                    await HandleMessageAsync(scope, message, parsed, ct);
-                }
-            }
-            catch (Exception ex)
+            var message = await client.Inbox.GetMessageAsync(uid, ct);
+            var parseResult = parser.Parse(message.Subject ?? "");
+
+            if (parseResult.IsFailure)
             {
-                logger.LogError(ex, $"Ошибка при обработке письма UID: {uid}");
+                logger.LogWarning($"Тема письма {uid} не распознана: {message.Subject}. Ошибка: {parseResult.Error.Message}");
+                await client.Inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, ct);
+                continue;
             }
-            finally
+
+            var result = await HandleMessageInternalAsync(scope, message, parseResult.Value, ct);
+
+            if (result.IsSuccess)
             {
                 await client.Inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, ct);
+            }
+            else
+            {
+                logger.LogError($"Ошибка обработки письма {uid}: {result.Error.Message}");
             }
         }
         await client.DisconnectAsync(true, ct);
     }
 
-    private async Task HandleMessageAsync(IServiceScope scope, MimeMessage message, ParsedEmail parsed, CancellationToken ct)
+    private async Task<Result> HandleMessageInternalAsync(IServiceScope scope, MimeMessage message, ParsedEmail parsed, CancellationToken ct)
     {
-        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
-        using var db = await dbFactory.CreateDbContextAsync(ct);
-
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var storage = scope.ServiceProvider.GetRequiredService<IFileStorage>();
         var studentService = scope.ServiceProvider.GetRequiredService<IStudentService>();
-        var analyzer = scope.ServiceProvider.GetRequiredService<ICodeAnalyzer>();
-        var aiReviewer = scope.ServiceProvider.GetRequiredService<IAiCodeReviewer>();
+        var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
 
         var mailbox = message.From.Mailboxes.FirstOrDefault();
-        if (string.IsNullOrEmpty(mailbox?.Address)) return;
+        if (mailbox == null) return Result.Failure("Email.NoSender", "Отправитель не определен.");
 
-        var student = await studentService.GetOrCreateStudentAsync(mailbox.Name ?? mailbox.Address, parsed.Group, mailbox.Address);
+        var studentRes = await studentService.GetOrCreateStudentAsync(mailbox.Name ?? mailbox.Address, parsed.Group, mailbox.Address);
+        if (studentRes.IsFailure) return Result.Failure(studentRes.Error);
 
-        var subject = await db.Subjects
-            .Include(s => s.Assignments)
-            .FirstOrDefaultAsync(s =>
-                s.Title.Value == parsed.SubjectTitle &&
-                s.Semester == parsed.Semester, ct);
+        var subject = await db.Subjects.Include(s => s.Assignments)
+            .FirstOrDefaultAsync(s => s.Title.Value == parsed.SubjectTitle && s.Semester == parsed.Semester, ct);
 
-        var assignment = subject?.Assignments.FirstOrDefault(a => a.Title == parsed.AssignmentTitle);
-
-        if (assignment == null)
-        {
-            logger.LogWarning($"Задание '{parsed.AssignmentTitle}' не найдено в предмете '{parsed.SubjectTitle}'");
-            return;
-        }
+        var assignment = subject?.Assignments.FirstOrDefault(a => a.Title.Value.Equals(parsed.AssignmentTitle, StringComparison.OrdinalIgnoreCase));
+        if (assignment == null) return Result.Failure("Assignment.NotFound", $"Задание {parsed.AssignmentTitle} не найдено.");
 
         var archiveInfo = await CreateFinalArchiveAsync(message, ct);
-        if (archiveInfo == null) return;
+        if (archiveInfo == null) return Result.Failure("Attachment.Empty", "Письмо не содержит подходящих файлов или превышен лимит размера.");
 
-        var hash = GetHash(archiveInfo.FinalFileBytes);
+        var hashRes = FileHash.Create(Convert.ToHexString(SHA256.HashData(archiveInfo.FinalFileBytes)));
+        if (hashRes.IsFailure) return Result.Failure(hashRes.Error);
 
-        var submission = await db.Submissions
-            .Include(s => s.History)
-            .FirstOrDefaultAsync(s => s.StudentId == student.Id && s.AssignmentId == assignment.Id, ct);
+        var isDuplicate = await db.Submissions.AnyAsync(s =>
+            s.StudentId == studentRes.Value.Id &&
+            s.AssignmentId == assignment.Id &&
+            s.History.Any(h => h.File.Hash == hashRes.Value), ct);
 
-        if (submission == null)
+        if (isDuplicate) return Result.Success();
+
+        return await _retryPolicy.ExecuteAsync(async () =>
         {
-            submission = new Submission(student.Id, assignment.Id);
-            db.Submissions.Add(submission);
-        }
+            var uploadRes = await storage.UploadAsync(new MemoryStream(archiveInfo.FinalFileBytes), archiveInfo.FinalFileName, "application/zip", ct);
+            if (uploadRes.IsFailure) return Result.Failure(uploadRes.Error);
 
-        if (submission.History.Any(h => h.FileHash == hash))
-        {
-            logger.LogInformation("Эта версия файла уже была загружена ранее.");
-            return;
-        }
+            var submission = await db.Submissions.Include(s => s.History)
+                .FirstOrDefaultAsync(s => s.StudentId == studentRes.Value.Id && s.AssignmentId == assignment.Id, ct);
 
-        var analysisResult = await analyzer.AnalyzeZipAsync(new MemoryStream(archiveInfo.FinalFileBytes), ct);
-        string aiResult;
-        try
-        {
-            var allCodeText = await ExtractAllCodeToStringAsync(archiveInfo.FinalFileBytes, ct);
-            aiResult = await aiReviewer.GetReviewAsync(allCodeText, ct);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "AI Review failed");
-            aiResult = "Ошибка вызова ИИ.";
-        }
+            if (submission == null)
+            {
+                submission = SubmissionAggregate.Create(studentRes.Value.Id, assignment.Id);
+                db.Submissions.Add(submission);
+            }
 
-        var finalReport = $"### ROSLYN ANALYSIS\n{analysisResult}\n\n### AI REVIEW\n{aiResult}";
+            var metadataVo = FileMetadata.Create(archiveInfo.FinalFileName, uploadRes.Value, hashRes.Value);
 
-        await _retryPolicy.ExecuteAsync(async () =>
-        {
-            var storagePath = await storage.UploadAsync(
-                new MemoryStream(archiveInfo.FinalFileBytes),
-                archiveInfo.FinalFileName,
-                "application/zip",
-                ct);
+            if (metadataVo.IsFailure) return Result.Failure(metadataVo.Error);
 
-            submission.AddAttempt(
-                archiveInfo.FinalFileName,
-                storagePath,
-                hash,
-                "Работа поставлена в очередь на автоматический анализ...",
-                assignment.Deadline);
+            var attemptRes = submission.AddAttempt(metadataVo.Value, assignment.Deadline);
+            if (attemptRes.IsFailure) return attemptRes;
 
             await db.SaveChangesAsync(ct);
 
-            var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
-            var historyRecord = submission.History.First(h => h.FileHash == hash);
-
+            var historyRecord = submission.History.First(h => h.FileHash == hashRes.Value);
             await publishEndpoint.Publish(new AnalyzeSubmissionTask(historyRecord.Id), ct);
 
-            logger.LogInformation($"[Worker] Письмо обработано и отправлено в RabbitMQ: {student.Name}");
+            return Result.Success();
         });
     }
 
-    private string GetHash(byte[] data) => Convert.ToHexString(SHA256.HashData(data));
-
     private async Task<FinalArchiveInfo?> CreateFinalArchiveAsync(MimeMessage message, CancellationToken ct)
     {
-        var relevantAttachments = message.Attachments
-            .OfType<MimePart>()
-            .Where(p => p.FileName != null && IsRelevantFile(p.FileName))
-            .ToList();
+        var relevantAttachments = message.Attachments.OfType<MimePart>()
+            .Where(p => p.FileName != null && IsRelevantFile(p.FileName)).ToList();
 
-        if (relevantAttachments.Count == 0)
-        {
-            logger.LogWarning("Письмо пропущено: нет вложений подходящих форматов.");
-            return null;
-        }
+        if (relevantAttachments.Count == 0) return null;
 
-        long totalSize = 0;
-        foreach (var part in relevantAttachments)
-        {
-            totalSize += part.Content?.Stream?.Length ?? 0;
-        }
-
+        var totalSize = relevantAttachments.Sum(p => p.Content?.Stream?.Length ?? 0);
         if (totalSize > _maxFileSizeBytes)
         {
-            logger.LogWarning($"Письмо от {message.From} пропущено: размер вложений ({totalSize / 1024 / 1024} МБ) превышает лимит {_maxFileSizeBytes / 1024 / 1024} МБ");
+            logger.LogWarning($"Размер вложений ({totalSize / 1024 / 1024} МБ) превышает лимит.");
             return null;
         }
 
@@ -218,37 +169,17 @@ public class Worker(
             return new FinalArchiveInfo(ms.ToArray(), relevantAttachments[0].FileName!);
         }
 
-        var zipBytes = await CreateZipFromAttachmentsAsync(relevantAttachments, ct);
-        return new FinalArchiveInfo(zipBytes, $"submission_{DateTime.UtcNow:yyyyMMdd_HHmmss}.zip");
-    }
-
-    private async Task<byte[]> CreateZipFromAttachmentsAsync(List<MimePart> parts, CancellationToken ct)
-    {
         using var outStream = new MemoryStream();
         using (var archive = new ZipArchive(outStream, ZipArchiveMode.Create, true))
         {
-            foreach (var part in parts)
+            foreach (var part in relevantAttachments)
             {
                 var entry = archive.CreateEntry(part.FileName ?? Guid.NewGuid().ToString(), CompressionLevel.Optimal);
                 using var entryStream = entry.Open();
                 await part.Content.DecodeToAsync(entryStream, ct);
             }
         }
-        return outStream.ToArray();
-    }
-
-    private async Task<string> ExtractAllCodeToStringAsync(byte[] zipBytes, CancellationToken ct)
-    {
-        var sb = new StringBuilder();
-        using var archive = new ZipArchive(new MemoryStream(zipBytes));
-        var codeExtensions = new[] { ".cs" };
-
-        foreach (var entry in archive.Entries.Where(e => codeExtensions.Contains(Path.GetExtension(e.Name))))
-        {
-            using var reader = new StreamReader(entry.Open());
-            sb.AppendLine($"FILE: {entry.FullName}\n{await reader.ReadToEndAsync(ct)}\n");
-        }
-        return sb.ToString();
+        return new FinalArchiveInfo(outStream.ToArray(), $"submission_{DateTime.UtcNow:yyyyMMdd_HHmmss}.zip");
     }
 
     private bool IsRelevantFile(string name) =>

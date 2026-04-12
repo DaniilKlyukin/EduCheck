@@ -1,48 +1,126 @@
 ﻿@page "/students"
-@using EduCheck.Core.Entities
-@using EduCheck.Core.Interfaces
+@using EduCheck.Application.Interfaces
+@using EduCheck.Core.Domain.Aggregates
+@using EduCheck.Core.Primitives
 @using Microsoft.AspNetCore.Components.Web
 @inject IStudentService StudentService
 
-<PageTitle>Студенты</PageTitle>
+<PageTitle>Студенты - EduCheck</PageTitle>
 
-<h3>Студенты в базе</h3>
-
-<div class="mb-3">
-    <input @bind="searchTerm" @bind:event="oninput" class="form-control" placeholder="Поиск по имени или группе..." />
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3>Студенты в базе</h3>
+    <span class="badge bg-primary">Всего: @FilteredStudents.Count()</span>
 </div>
 
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>Группа</th>
-            <th>ФИО</th>
-            <th>Email</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var student in FilteredStudents)
-        {
-            <tr>
-                <td><span class="badge bg-secondary">@student.Group</span></td>
-                <td>@student.Name</td>
-                <td><a href="mailto:@student.Email">@student.Email</a></td>
-            </tr>
-        }
-    </tbody>
-</table>
+<div class="mb-4">
+    <div class="input-group shadow-sm">
+        <span class="input-group-text bg-white border-end-0">
+            <i class="bi bi-search text-muted"></i>
+        </span>
+        <input @bind="_searchTerm"
+               @bind:event="oninput"
+               class="form-control border-start-0"
+               placeholder="Поиск по имени, почте или названию группы (например, ИУ7)..." />
+    </div>
+</div>
 
-@code{
-    private List<Student> students = new();
-    private string searchTerm = "";
+@if (_isLoading)
+{
+    <div class="text-center my-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-2">Загрузка списка студентов...</p>
+    </div>
+}
+else if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <div class="alert alert-danger shadow-sm" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        @_errorMessage
+    </div>
+}
+else
+{
+    <div class="card shadow-sm border-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 15%">Группа</th>
+                        <th style="width: 45%">ФИО</th>
+                        <th style="width: 40%">Email</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!FilteredStudents.Any())
+                    {
+                        <tr>
+                            <td colspan="3" class="text-center py-5 text-muted">
+                                Студенты не найдены
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var student in FilteredStudents)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-3 py-2">
+                                        @student.Group.Value
+                                    </span>
+                                </td>
+                                <td class="fw-bold">@student.Name</td>
+                                <td>
+                                    <a href="mailto:@student.Email.Value" class="text-decoration-none d-flex align-items-center">
+                                        <i class="bi bi-envelope-at me-2 text-muted"></i>
+                                        @student.Email.Value
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<StudentAggregate> _students = new();
+    private string _searchTerm = "";
+    private bool _isLoading = true;
+    private string? _errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
-        students = await StudentService.GetAllStudentsAsync();
+        await LoadStudents();
     }
 
-    private IEnumerable<Student> FilteredStudents => students
-        .Where(s => string.IsNullOrWhiteSpace(searchTerm)
-                || s.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
-                || s.Group.ToString().Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+    private async Task LoadStudents()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        var result = await StudentService.GetAllStudentsAsync();
+
+        if (result.IsSuccess)
+        {
+            _students = result.Value
+                .OrderBy(s => s.Group.Value)
+                .ThenBy(s => s.Name)
+                .ToList();
+        }
+        else
+        {
+            _errorMessage = result.Error.Message;
+        }
+
+        _isLoading = false;
+    }
+
+    private IEnumerable<StudentAggregate> FilteredStudents => _students
+        .Where(s => string.IsNullOrWhiteSpace(_searchTerm)
+                || s.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)
+                || s.Group.Value.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)
+                || s.Email.Value.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase));
 }

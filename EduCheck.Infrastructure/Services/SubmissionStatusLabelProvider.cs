@@ -1,5 +1,5 @@
-﻿using EduCheck.Core.Enums;
-using EduCheck.Core.Interfaces;
+﻿using EduCheck.Application.Interfaces;
+using EduCheck.Core.Domain.Enums;
 
 namespace EduCheck.Infrastructure.Services;
 

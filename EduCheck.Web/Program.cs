@@ -1,3 +1,4 @@
+using EduCheck.Application;
 using EduCheck.Infrastructure;
 using EduCheck.Infrastructure.Data;
 using EduCheck.Web;
@@ -7,10 +8,18 @@ using Minio;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure();
+builder.Services.AddWebServices();
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 builder.Services.AddDbContextFactory<AppDbContext>(opt =>
     opt.UseNpgsql(connectionString));
+
+builder.Services.AddScoped<AppDbContext>(sp =>
+    sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
+
 
 var storageSettings = builder.Configuration.GetSection("StorageSettings");
 builder.Services.AddMinio(configureSource => configureSource
@@ -20,9 +29,6 @@ builder.Services.AddMinio(configureSource => configureSource
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-
-builder.Services.AddInfrastructure();
-builder.Services.AddWebServices();
 
 var app = builder.Build();
 

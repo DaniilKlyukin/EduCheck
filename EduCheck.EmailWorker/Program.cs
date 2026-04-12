@@ -1,3 +1,4 @@
+using EduCheck.Application;
 using EduCheck.EmailWorker;
 using EduCheck.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,7 @@ builder.Services.AddMinio(configureSource => configureSource
     .WithCredentials(storageSettings["AccessKey"], storageSettings["SecretKey"])
     .WithSSL(false));
 
+builder.Services.AddApplication();
 builder.Services.AddEmailWorkerServices();
 
 builder.Services.AddHostedService<Worker>();

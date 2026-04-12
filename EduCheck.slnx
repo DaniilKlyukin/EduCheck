@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="EduCheck.Application/EduCheck.Application.csproj" Id="959595a5-ac0e-4b7c-98b5-e8b65f3e5d23" />
   <Project Path="EduCheck.Core/EduCheck.Core.csproj" />
   <Project Path="EduCheck.EmailWorker/EduCheck.EmailWorker.csproj" />
   <Project Path="EduCheck.Infrastructure/EduCheck.Infrastructure.csproj" />

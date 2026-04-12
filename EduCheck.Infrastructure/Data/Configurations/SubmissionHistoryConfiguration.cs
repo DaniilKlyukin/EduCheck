@@ -1,5 +1,6 @@
-﻿using EduCheck.Core.Entities;
-using EduCheck.Core.ValueObjects;
+﻿using EduCheck.Core.Domain.Aggregates;
+using EduCheck.Core.Domain.Entities;
+using EduCheck.Core.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -9,23 +10,39 @@ public class SubmissionHistoryConfiguration : IEntityTypeConfiguration<Submissio
 {
     public void Configure(EntityTypeBuilder<SubmissionHistory> builder)
     {
+        builder.ToTable("SubmissionHistories");
         builder.HasKey(h => h.Id);
-        builder.HasIndex(h => h.FileHash);
 
-        builder.Property(h => h.Id)
-            .ValueGeneratedOnAdd();
+        builder.OwnsOne(h => h.File, file =>
+        {
+            file.Property(f => f.Name)
+                .HasColumnName("FileName")
+                .HasMaxLength(255)
+                .IsRequired();
 
-        builder.Property(h => h.FileHash)
-            .HasConversion(v => v.Value, v => new FileHash(v))
-            .HasMaxLength(128)
-            .IsRequired();
+            file.Property(f => f.StoragePath)
+                .HasColumnName("FileStoragePath")
+                .HasMaxLength(500)
+                .IsRequired();
 
-        builder.HasOne<Submission>()
+            file.Property(f => f.Hash)
+                .HasColumnName("FileHash")
+                .HasConversion(v => v.Value, v => FileHash.Create(v).Value)
+                .HasMaxLength(128)
+                .IsRequired();
+
+            file.HasIndex(f => f.Hash);
+        });
+
+        builder.Property(h => h.AnalysisResult)
+            .HasColumnType("jsonb");
+
+        builder.Property(h => h.ReceivedAt).IsRequired();
+        builder.Property(h => h.IsLate).IsRequired();
+
+        builder.HasOne<SubmissionAggregate>()
             .WithMany(s => s.History)
             .HasForeignKey(h => h.SubmissionId)
             .OnDelete(DeleteBehavior.Cascade);
-
-        builder.Property(h => h.FileName).HasMaxLength(255).IsRequired();
-        builder.Property(h => h.FileStoragePath).HasMaxLength(500).IsRequired();
     }
 }

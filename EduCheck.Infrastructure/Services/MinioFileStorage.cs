@@ -1,4 +1,5 @@
-﻿using EduCheck.Core.Interfaces;
+﻿using EduCheck.Application.Interfaces;
+using EduCheck.Core.Primitives;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Minio;
@@ -22,32 +23,50 @@ public class MinioFileStorage : IFileStorage
         _bucketName = config["StorageSettings:BucketName"] ?? "submissions";
     }
 
-    public async Task DeleteAsync(string objectName, CancellationToken ct = default)
+    public async Task<Result> DeleteAsync(string objectName, CancellationToken ct = default)
     {
-        var removeObjectArgs = new RemoveObjectArgs()
-            .WithBucket(_bucketName)
-            .WithObject(objectName);
+        try
+        {
+            var removeObjectArgs = new RemoveObjectArgs()
+                .WithBucket(_bucketName)
+                .WithObject(objectName);
 
-        await _minioClient.RemoveObjectAsync(removeObjectArgs, ct);
+            await _minioClient.RemoveObjectAsync(removeObjectArgs, ct);
+
+            return Result.Success();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Не удалось удалить файл.");
+            return Result.Failure<Stream>("Storage.DownloadError", "Не удалось удалить файл.");
+        }
     }
 
-    public async Task<Stream> DownloadAsync(string objectName, CancellationToken ct = default)
+    public async Task<Result<Stream>> DownloadAsync(string objectName, CancellationToken ct = default)
     {
-        var ms = new MemoryStream();
+        try
+        {
+            var ms = new MemoryStream();
 
-        var getObjectArgs = new GetObjectArgs()
-            .WithBucket(_bucketName)
-            .WithObject(objectName)
-            .WithCallbackStream(s => s.CopyTo(ms));
+            var getObjectArgs = new GetObjectArgs()
+                .WithBucket(_bucketName)
+                .WithObject(objectName)
+                .WithCallbackStream(s => s.CopyTo(ms));
 
-        await _minioClient.GetObjectAsync(getObjectArgs, ct);
+            await _minioClient.GetObjectAsync(getObjectArgs, ct);
 
-        ms.Position = 0;
+            ms.Position = 0;
 
-        return ms;
+            return ms;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Не удалось скачать файл.");
+            return Result.Failure<Stream>("Storage.DownloadError", "Не удалось скачать файл.");
+        }
     }
 
-    public async Task<string> GetDownloadUrlAsync(string path, string fileName)
+    public async Task<Result<string>> GetDownloadUrlAsync(string path, string fileName)
     {
         try
         {
@@ -67,33 +86,36 @@ public class MinioFileStorage : IFileStorage
         catch (Exception ex)
         {
             _logger.LogError(ex, $"Ошибка генерации ссылки для файла {path}");
-            throw;
+            return Result.Failure<string>("Storage.DownloadError", $"Ошибка генерации ссылки для файла {path}");
         }
     }
 
-    public async Task<string> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken ct = default)
+    public async Task<Result<string>> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken ct = default)
     {
-        var beArgs = new BucketExistsArgs().WithBucket(_bucketName);
-        var found = await _minioClient.BucketExistsAsync(beArgs, ct);
-
-        if (!found)
+        try
         {
-            var mbArgs = new MakeBucketArgs().WithBucket(_bucketName);
-            await _minioClient.MakeBucketAsync(mbArgs, ct);
+            var beArgs = new BucketExistsArgs().WithBucket(_bucketName);
+            if (!await _minioClient.BucketExistsAsync(beArgs, ct))
+            {
+                await _minioClient.MakeBucketAsync(new MakeBucketArgs().WithBucket(_bucketName), ct);
+            }
+
+            var objectName = $"{DateTime.UtcNow:yyyy/MM/dd}/{Guid.NewGuid()}_{fileName}";
+            stream.Position = 0;
+
+            await _minioClient.PutObjectAsync(new PutObjectArgs()
+                .WithBucket(_bucketName)
+                .WithObject(objectName)
+                .WithStreamData(stream)
+                .WithObjectSize(stream.Length)
+                .WithContentType(contentType), ct);
+
+            return objectName;
         }
-
-        var objectName = $"{DateTime.UtcNow:yyyy/MM/dd}/{Guid.NewGuid()}_{fileName}";
-
-        stream.Position = 0;
-        var putObjectArgs = new PutObjectArgs()
-            .WithBucket(_bucketName)
-            .WithObject(objectName)
-            .WithStreamData(stream)
-            .WithObjectSize(stream.Length)
-            .WithContentType(contentType);
-
-        await _minioClient.PutObjectAsync(putObjectArgs, ct);
-
-        return objectName;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Minio Upload Error");
+            return Result.Failure<string>("Storage.UploadError", "Не удалось загрузить файл.");
+        }
     }
 }

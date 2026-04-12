@@ -1,4 +1,4 @@
-﻿using EduCheck.Core.Interfaces;
+﻿using EduCheck.Application.Interfaces;
 using MailKit.Net.Smtp;
 using Microsoft.Extensions.Configuration;
 using MimeKit;
