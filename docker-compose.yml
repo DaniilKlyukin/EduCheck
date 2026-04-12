@@ -28,6 +28,17 @@ services:
     volumes:
       - minio_data:/data
   
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: educheck_mq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+  
   pgadmin:
     container_name: pgadmin_container
     image: dpage/pgadmin4
