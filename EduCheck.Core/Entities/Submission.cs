@@ -1,4 +1,5 @@
 ﻿using EduCheck.Core.Enums;
+using EduCheck.Core.ValueObjects;
 
 namespace EduCheck.Core.Entities;
 
@@ -8,35 +9,70 @@ namespace EduCheck.Core.Entities;
 /// </summary>
 public class Submission
 {
-    public Guid Id { get; set; }
-    public Guid StudentId { get; set; }
-    public Student Student { get; set; } = null!;
-    public Guid AssignmentId { get; set; }
-    public Assignment Assignment { get; set; } = null!;
-    /// <summary>
-    /// Текущий этап обработки работы (новое, в проверке, принято и т.д.).
-    /// </summary>
-    public SubmissionStatus Status { get; set; } = SubmissionStatus.New;
+    public Guid Id { get; private set; }
+    public Guid StudentId { get; private set; }
+    public Guid AssignmentId { get; private set; }
+    public SubmissionStatus Status { get; private set; }
+    public bool HasLateUpload { get; private set; }
+    public int CurrentVersion { get; private set; }
+    public DateTime LastActivityAt { get; private set; }
 
-    /// <summary>
-    /// Указывает, что хотя бы одна из версий была загружена после наступления дедлайна.
-    /// </summary>
-    public bool HasLateUpload { get; set; }
+    private readonly List<SubmissionHistory> _history = new();
+    public IReadOnlyCollection<SubmissionHistory> History => _history.AsReadOnly();
 
-    /// <summary>
-    /// Номер последней загруженной версии (инкрементируется при каждом новом файле).
-    /// </summary>
-    public int CurrentVersion { get; set; }
+    private readonly List<Review> _reviews = new();
+    public IReadOnlyCollection<Review> Reviews => _reviews.AsReadOnly();
 
-    /// <summary>
-    /// Время последнего изменения (загрузка файла или выставление оценки).
-    /// </summary>
-    public DateTime LastActivityAt { get; set; }
+    public Student Student { get; private set; } = null!;
+    public Assignment Assignment { get; private set; } = null!;
 
-    /// <summary>
-    /// Полная история загруженных файлов и их метаданных.
-    /// </summary>
-    public List<SubmissionHistory> History { get; set; } = new();
+    private Submission() { } // Для EF
 
-    public List<Review> Reviews { get; set; } = new();
+    public Submission(Guid studentId, Guid assignmentId)
+    {
+        Id = Guid.NewGuid();
+        StudentId = studentId;
+        AssignmentId = assignmentId;
+        Status = SubmissionStatus.PendingAnalysis;
+        CurrentVersion = 0;
+        HasLateUpload = false;
+        LastActivityAt = DateTime.UtcNow;
+    }
+
+    public void AddAttempt(string fileName, string storagePath, FileHash fileHash, string analysisResult, DateTime assignmentDeadline)
+    {
+        if (_history.Any(h => h.FileHash == fileHash))
+            return;
+
+        CurrentVersion++;
+        LastActivityAt = DateTime.UtcNow;
+
+        bool isLate = DateTime.UtcNow > assignmentDeadline;
+        if (isLate) HasLateUpload = true;
+
+        if (Status == SubmissionStatus.UpdateRequired || Status == SubmissionStatus.Accepted)
+            Status = SubmissionStatus.PendingAnalysis;
+
+        var history = new SubmissionHistory(Id, CurrentVersion, fileName, storagePath, fileHash, isLate, analysisResult);
+        _history.Add(history);
+    }
+
+    public void ReviewSubmission(Grade? grade, string? comment, SubmissionStatus newStatus)
+    {
+        Status = newStatus;
+        LastActivityAt = DateTime.UtcNow;
+
+        var review = new Review(Id, CurrentVersion, grade, comment);
+        _reviews.Add(review);
+    }
+
+    public void CompleteAnalysis(string finalReport)
+    {
+        if (Status == SubmissionStatus.PendingAnalysis)
+        {
+            Status = SubmissionStatus.New;
+        }
+
+        LastActivityAt = DateTime.UtcNow;
+    }
 }

@@ -1,4 +1,6 @@
-﻿namespace EduCheck.Core.Entities;
+﻿using EduCheck.Core.ValueObjects;
+
+namespace EduCheck.Core.Entities;
 
 /// <summary>
 /// Снимок (snapshot) конкретной загрузки файла студентом.
@@ -6,35 +8,39 @@
 /// </summary>
 public class SubmissionHistory
 {
-    public Guid Id { get; set; }
-    public Guid SubmissionId { get; set; }
+    public Guid Id { get; private set; }
+    public Guid SubmissionId { get; private set; }
+    public int Version { get; private set; }
+    public string FileName { get; private set; } = string.Empty;
+    public string FileStoragePath { get; private set; } = string.Empty;
+    public FileHash FileHash { get; private set; }
+    public DateTime ReceivedAt { get; private set; }
+    public bool IsLate { get; private set; }
+    public string? AnalysisResult { get; private set; }
 
-    /// <summary>
-    /// Порядковый номер попытки.
-    /// </summary>
-    public int Version { get; set; }
+    private SubmissionHistory() { } // Для EF
 
-    public string FileName { get; set; } = string.Empty;
+    internal SubmissionHistory(
+        Guid submissionId,
+        int version,
+        string fileName,
+        string storagePath,
+        FileHash fileHash,
+        bool isLate,
+        string? analysisResult)
+    {
+        SubmissionId = submissionId;
+        Version = version;
+        FileName = fileName;
+        FileStoragePath = storagePath;
+        FileHash = fileHash ?? throw new ArgumentNullException(nameof(fileHash));
+        IsLate = isLate;
+        AnalysisResult = analysisResult;
+        ReceivedAt = DateTime.UtcNow;
+    }
 
-    /// <summary>
-    /// Путь к объекту во внешнем хранилище (локальный диск или S3/MinIO).
-    /// </summary>
-    public string FileStoragePath { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Контрольная сумма файла (SHA-256) для предотвращения дубликатов и базовой проверки на плагиат.
-    /// </summary>
-    public string FileHash { get; set; } = string.Empty;
-
-    public DateTime ReceivedAt { get; set; }
-
-    /// <summary>
-    /// Флаг, указывающий, была ли данная конкретная версия прислана позже дедлайна задания.
-    /// </summary>
-    public bool IsLate { get; set; }
-
-    /// <summary>
-    /// Результат автоматического анализа кода (в формате JSON или текстового отчета).
-    /// </summary>
-    public string? AnalysisResult { get; set; }
+    public void SetAnalysisResult(string result)
+    {
+        AnalysisResult = result;
+    }
 }

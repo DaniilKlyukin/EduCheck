@@ -1,111 +1,98 @@
 ﻿@page "/review/{Id:guid}"
 @using EduCheck.Core.Entities
+@using EduCheck.Core.Enums
 @using EduCheck.Core.Interfaces
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @inject ISubmissionService SubmissionService
-@inject IEmailService EmailService
+@inject ISubmissionStatusLabelProvider StatusLabelProvider
 @inject NavigationManager Nav
 @inject IJSRuntime JS
-@inject ISubmissionStatusLabelProvider StatusLabelProvider
 
-<PageTitle>Рецензия</PageTitle>
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+<PageTitle>Проверка работы</PageTitle>
 
 @if (submission == null)
 {
-    <div class="d-flex justify-content-center mt-5">
-        <div class="spinner-border" role="status"></div>
-    </div>
+    <div class="spinner-border"></div>
 }
 else
 {
     <div class="mb-4">
         <a href="/submissions" class="btn btn-link ps-0">К списку работ</a>
-        <h3>Проверка: @submission.Student.Name (@submission.Student.Group)</h3>
-        <p class="text-muted">@submission.Assignment.Subject.Title — @submission.Assignment.Title</p>
+        <h3>@submission.Student.Name (@submission.Student.Group)</h3>
+        <p class="text-muted">Задание: @submission.Assignment.Title</p>
     </div>
 
     <div class="row">
         <div class="col-md-7">
-            <h4 class="h5 mb-3">История версий и файлы</h4>
+            <h4 class="h5 mb-3">История версий</h4>
             @foreach (var h in submission.History.OrderByDescending(x => x.Version))
             {
                 <div class="card mb-3 shadow-sm">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <span>Версия @h.Version от @h.ReceivedAt.ToLocalTime().ToString("g")</span>
-                        <button class="btn btn-sm btn-primary" @onclick="() => DownloadFile(h.Id)">
-                            Скачать файл
-                        </button>
+                        <button class="btn btn-sm btn-primary" @onclick="() => DownloadFile(h.Id)">Скачать</button>
                     </div>
                     <div class="card-body p-0">
                         @if (h.IsLate)
                         {
-                            <div class="px-3 pt-2">
-                                <span class="badge bg-danger">Сдано после дедлайна</span>
-                            </div>
+                            <div class="px-3 pt-2"><span class="badge bg-danger">Сдано после дедлайна</span></div>
                         }
-    
-                        <pre class="m-0"
-                             style="resize: vertical;
-                            overflow: auto;
-                            min-height: 200px;
-                            max-height: 800px;
-                            white-space: pre-wrap;
-                            word-wrap: break-word;
-                            border-top: 1px solid #444;
-                            color: #efefef;
-                            background-color: #2d2d2d;">
-                            @h.AnalysisResult</pre>
+                        <pre class="m-0 p-3 bg-dark text-light" style="max-height: 500px; overflow: auto; white-space: pre-wrap;">@h.AnalysisResult</pre>
                     </div>
                 </div>
-            }
-
-            @if (submission.Reviews?.Any() == true)
-            {
-                <h4 class="h5 mt-5 mb-3">Предыдущие рецензии</h4>
-                @foreach (var r in submission.Reviews.OrderByDescending(x => x.CheckedAt))
-                {
-                    <div class="card border-info mb-2 small">
-                        <div class="card-body py-2">
-                            <div class="d-flex justify-content-between">
-                                <strong>Оценка: @(r.Grade?.ToString() ?? "Без оценки")</strong>
-                                <span class="text-muted">@r.CheckedAt.ToLocalTime().ToString("g") (@r.SubmissionVersion)</span>
-                            </div>
-                            <div class="text-secondary mt-1">@r.TeacherComment</div>
-                        </div>
-                    </div>
-                }
             }
         </div>
 
         <div class="col-md-5">
             <div class="sticky-top" style="top: 20px;">
-                <h4 class="h5 mb-3">Выставить результат</h4>
-                <div class="card shadow-sm p-4">
+                <div class="card shadow-sm p-4 border-2 @GetStatusBorderClass()">
+                    <h4 class="h5 mb-3">Результат проверки</h4>
+                    
                     <div class="mb-3">
                         <label class="form-label fw-bold">Статус решения</label>
-                        <select @bind="submission.Status" class="form-select">
-                            @foreach (var status in Enum.GetValues<EduCheck.Core.Enums.SubmissionStatus>())
+                        <select @bind="selectedStatus" class="form-select form-select-lg">
+                            @foreach (var status in Enum.GetValues<SubmissionStatus>())
                             {
                                 <option value="@status">@StatusLabelProvider.GetDisplayName(status)</option>
                             }
                         </select>
                     </div>
+
                     <div class="mb-3">
                         <label class="form-label fw-bold">Баллы / Оценка</label>
-                        <input type="number" min="0" max="10" @bind="review.Grade" class="form-control" />
+                        <input type="number" min="0" max="10" @bind="grade" class="form-control" />
                     </div>
+
                     <div class="mb-3">
                         <label class="form-label fw-bold">Комментарий для студента</label>
-                        <textarea @bind="review.TeacherComment" class="form-control" rows="6" placeholder="Напишите замечания или похвалу..."></textarea>
+                        <textarea @bind="teacherComment" class="form-control" rows="6" placeholder="Замечания..."></textarea>
                     </div>
-                    <button class="btn btn-success w-100 py-2" @onclick="SaveAndSend" disabled="@isSaving">
+
+                    <div class="alert @GetStatusAlertClass() small mb-3">
+                        <i class="bi bi-info-circle me-2"></i>
+                        @GetStatusDescription()
+                    </div>
+
+                    <button class="btn @GetSubmitButtonClass() w-100 py-3 fw-bold shadow-sm" @onclick="SaveAndSend" disabled="@isSaving">
                         @if (isSaving)
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
                         }
-                        Сохранить и отправить Email
+                        else
+                        {
+                            @GetSubmitButtonText()
+                        }
                     </button>
+                    
+                    @if (selectedStatus == SubmissionStatus.New || selectedStatus == SubmissionStatus.InReview)
+                    {
+                        <div class="text-center mt-2 small text-muted">
+                            Внимание: работа останется открытой для проверки
+                        </div>
+                    }
                 </div>
             </div>
         </div>
@@ -115,29 +102,70 @@ else
 @code {
     [Parameter] public Guid Id { get; set; }
     private Submission? submission;
-    private Review review = new();
-    private bool isSaving = false;
+    private SubmissionStatus selectedStatus;
+    private int? grade;
+    private string? teacherComment;
+    private bool isSaving;
 
     protected override async Task OnInitializedAsync()
     {
         submission = await SubmissionService.GetSubmissionByIdAsync(Id);
-
         if (submission != null)
         {
-            review.SubmissionVersion = submission.CurrentVersion;
+            selectedStatus = submission.Status;
+            
+            if (selectedStatus == SubmissionStatus.New)
+            {
+                selectedStatus = SubmissionStatus.InReview;
+            }
         }
     }
 
-    private async Task DownloadFile(Guid historyId)
+    private string GetStatusBorderClass() => selectedStatus switch
     {
-        try
+        SubmissionStatus.Accepted => "border-success",
+        SubmissionStatus.UpdateRequired => "border-warning",
+        SubmissionStatus.InReview => "border-primary",
+        _ => "border-light"
+    };
+
+    private string GetStatusAlertClass() => selectedStatus switch
+    {
+        SubmissionStatus.Accepted => "alert-success",
+        SubmissionStatus.UpdateRequired => "alert-warning",
+        SubmissionStatus.InReview => "alert-primary",
+        _ => "alert-secondary"
+    };
+
+    private string GetSubmitButtonClass() => selectedStatus switch
+    {
+        SubmissionStatus.Accepted => "btn-success",
+        SubmissionStatus.UpdateRequired => "btn-warning",
+        _ => "btn-primary"
+    };
+
+    private string GetSubmitButtonText() => selectedStatus switch
+    {
+        SubmissionStatus.Accepted => "ПРИНЯТЬ И ЗАЧЕСТЬ",
+        SubmissionStatus.UpdateRequired => "ОТПРАВИТЬ НА ДОРАБОТКУ",
+        SubmissionStatus.InReview => "СОХРАНИТЬ ПРОМЕЖУТОЧНО",
+        _ => "СОХРАНИТЬ"
+    };
+
+    private string GetStatusDescription() => selectedStatus switch
+    {
+        SubmissionStatus.Accepted => "Работа будет закрыта. Студент получит уведомление об успешной сдаче.",
+        SubmissionStatus.UpdateRequired => "Студент увидит комментарии и сможет прислать новую версию файла.",
+        SubmissionStatus.InReview => "Статус 'На проверке'. Вы можете оставить комментарий, но работа не считается завершенной.",
+        _ => "Выберите финальный статус работы."
+    };
+
+    private async Task DownloadFile(Guid hId)
+    {
+        var url = await SubmissionService.GetDownloadUrlAsync(hId);
+        if (!string.IsNullOrEmpty(url))
         {
-            var url = await SubmissionService.GetDownloadUrlAsync(historyId);
             await JS.InvokeVoidAsync("open", url, "_blank");
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("alert", "Ошибка при получении файла: " + ex.Message);
         }
     }
 
@@ -147,12 +175,13 @@ else
         isSaving = true;
         try
         {
-            await SubmissionService.SubmitReviewAsync(Id, review, submission!.Status);
+            await SubmissionService.SubmitReviewAsync(Id, grade, teacherComment, selectedStatus);
             Nav.NavigateTo("/submissions");
         }
-        finally
+        catch (Exception ex)
         {
-            isSaving = false;
+            await JS.InvokeVoidAsync("alert", "Ошибка: " + ex.Message);
         }
+        finally { isSaving = false; }
     }
 }

@@ -30,12 +30,17 @@ public class SubmissionService(
     public async Task<List<SubmissionSummaryDto>> GetAllSubmissionsAsync()
     {
         using var db = await dbFactory.CreateDbContextAsync();
+
         return await db.Submissions
+            .AsNoTracking()
             .Select(s => new SubmissionSummaryDto(
                 s.Id,
                 s.Student.Name,
-                s.Student.Group,
-                s.Assignment.Subject.Title,
+                s.Student.Group.Value,
+                db.Subjects
+                    .Where(sub => sub.Assignments.Any(a => a.Id == s.AssignmentId))
+                    .Select(sub => sub.Title.Value)
+                    .FirstOrDefault() ?? "Unknown Subject",
                 s.Assignment.Title,
                 s.CurrentVersion,
                 s.Status,
@@ -58,41 +63,40 @@ public class SubmissionService(
     public async Task<Submission?> GetSubmissionByIdAsync(Guid id)
     {
         using var db = await dbFactory.CreateDbContextAsync();
+
         return await db.Submissions
             .Include(s => s.History)
             .Include(s => s.Reviews)
             .Include(s => s.Student)
             .Include(s => s.Assignment)
-                .ThenInclude(a => a.Subject)
             .FirstOrDefaultAsync(s => s.Id == id);
     }
 
-    public async Task SubmitReviewAsync(Guid submissionId, Review review, SubmissionStatus newStatus)
+    public async Task SubmitReviewAsync(Guid submissionId, int? grade, string? comment, SubmissionStatus newStatus)
     {
         using var db = await dbFactory.CreateDbContextAsync();
 
         var submission = await db.Submissions
             .Include(s => s.Student)
+            .Include(s => s.Reviews)
             .Include(s => s.Assignment)
-                .ThenInclude(a => a.Subject)
-            .FirstOrDefaultAsync(s => s.Id == submissionId);
+            .FirstOrDefaultAsync(s => s.Id == submissionId)
+            ?? throw new Exception("Submission not found");
 
-        if (submission == null) return;
+        var subjectTitle = await db.Subjects
+            .Where(sub => sub.Assignments.Any(a => a.Id == submission.AssignmentId))
+            .Select(sub => sub.Title.Value)
+            .FirstOrDefaultAsync() ?? "Дисциплина";
 
-        submission.Status = newStatus;
-
-        review.Id = Guid.NewGuid();
-        review.CheckedAt = DateTime.UtcNow;
-        review.SubmissionId = submission.Id;
-        db.Reviews.Add(review);
+        submission.ReviewSubmission(grade, comment, newStatus);
 
         await db.SaveChangesAsync();
 
-        var body = $"Ваша работа по предмету {submission.Assignment.Subject.Title} проверена.\n" +
+        var body = $"Ваша работа по предмету {subjectTitle} проверена.\n" +
                    $"Статус: {statusLabelProvider.GetDisplayName(submission.Status)}\n" +
-                   $"Оценка: {review.Grade}\n" +
-                   $"Комментарий: {review.TeacherComment}";
+                   $"Оценка: {grade?.ToString() ?? "без оценки"}\n" +
+                   $"Комментарий: {comment}";
 
-        await emailService.SendFeedbackAsync(submission.Student.Email, "Результат проверки", body);
+        await emailService.SendFeedbackAsync(submission.Student.Email.Value, "Результат проверки", body);
     }
 }

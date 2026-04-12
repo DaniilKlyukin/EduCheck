@@ -1,5 +1,6 @@
 ﻿using EduCheck.Core.Entities;
 using EduCheck.Core.Interfaces;
+using EduCheck.Core.ValueObjects;
 using EduCheck.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,21 +18,15 @@ public class StudentService(IDbContextFactory<AppDbContext> dbFactory) : IStuden
     public async Task<Student> GetOrCreateStudentAsync(string name, string group, string email)
     {
         using var db = await dbFactory.CreateDbContextAsync();
+        var emailVo = new EmailAddress(email);
+        var groupVo = new GroupName(group);
 
-        var student = await db.Students.FirstOrDefaultAsync(s => s.Email == email);
+        var student = await db.Students.FirstOrDefaultAsync(s => s.Email == emailVo);
 
         if (student == null)
         {
-            student = new Student
-            {
-                Id = Guid.NewGuid(),
-                Email = email,
-                Name = name,
-                Group = group
-            };
-
+            student = new Student(name, groupVo, emailVo);
             db.Students.Add(student);
-
             await db.SaveChangesAsync();
         }
 

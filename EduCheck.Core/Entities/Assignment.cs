@@ -1,21 +1,27 @@
-﻿namespace EduCheck.Core.Entities;
+﻿using EduCheck.Core.ValueObjects;
+
+namespace EduCheck.Core.Entities;
 
 /// <summary>
 /// Конкретная учебная задача (лабораторная работа, проект) в рамках предмета.
 /// </summary>
 public class Assignment
 {
-    public Guid Id { get; set; }
-    public Guid SubjectId { get; set; }
-    public Subject Subject { get; set; } = null!;
+    public Guid Id { get; private set; }
+    public Guid SubjectId { get; private set; }
+    public AssignmentTitle Title { get; private set; }
+    public DateTime Deadline { get; private set; }
 
-    /// <summary>
-    /// Заголовок задания (например, "Лабораторная работа №1").
-    /// </summary>
-    public string Title { get; set; } = string.Empty;
+    private Assignment() { } // Для EF
 
-    /// <summary>
-    /// Срок сдачи, после которого загрузки помечаются как IsLate.
-    /// </summary>
-    public DateTime Deadline { get; set; }
+    internal Assignment(AssignmentTitle title, DateTime deadline)
+    {
+        Update(title, deadline);
+    }
+
+    public void Update(AssignmentTitle title, DateTime deadline)
+    {
+        Title = title ?? throw new ArgumentNullException(nameof(title));
+        Deadline = deadline.ToUniversalTime();
+    }
 }

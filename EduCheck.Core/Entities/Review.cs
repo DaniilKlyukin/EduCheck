@@ -1,29 +1,27 @@
-﻿namespace EduCheck.Core.Entities;
+﻿using EduCheck.Core.ValueObjects;
+
+namespace EduCheck.Core.Entities;
 
 /// <summary>
 /// Результат проверки работы преподавателем.
 /// </summary>
 public class Review
 {
-    public Guid Id { get; set; }
-    public Guid SubmissionId { get; set; }
+    public Guid Id { get; private set; }
+    public Guid SubmissionId { get; private set; }
+    public int SubmissionVersion { get; private set; }
+    public Grade? Grade { get; private set; }
+    public string? TeacherComment { get; private set; }
+    public DateTime CheckedAt { get; private set; }
 
-    public Submission Submission { get; set; } = null!;
+    private Review() { } // Для EF
 
-    /// <summary>
-    /// Указывает, какая именно версия работы была оценена данным ревью.
-    /// </summary>
-    public int SubmissionVersion { get; set; }
-
-    /// <summary>
-    /// Оценка по установленной шкале (может быть null, если оставлен только комментарий).
-    /// </summary>
-    public int? Grade { get; set; }
-
-    /// <summary>
-    /// Обратная связь от преподавателя студенту.
-    /// </summary>
-    public string? TeacherComment { get; set; }
-
-    public DateTime CheckedAt { get; set; }
+    internal Review(Guid submissionId, int version, Grade? grade, string? comment)
+    {
+        SubmissionId = submissionId;
+        SubmissionVersion = version;
+        Grade = grade;
+        TeacherComment = comment;
+        CheckedAt = DateTime.UtcNow;
+    }
 }

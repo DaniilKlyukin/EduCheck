@@ -1,9 +1,9 @@
 ﻿using EduCheck.Core.Entities;
 using EduCheck.Core.Interfaces;
+using EduCheck.Core.ValueObjects;
 using EduCheck.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using static SharpCompress.Compressors.Filters.BranchExecFilter;
 
 namespace EduCheck.Infrastructure.Services;
 
@@ -11,95 +11,65 @@ public class SubjectService(
     IDbContextFactory<AppDbContext> dbFactory,
     ILogger<SubjectService> logger) : ISubjectService
 {
-    public async Task AddAssignmentAsync(Guid subjectId, Assignment assignment)
+    public async Task AddAssignmentAsync(Guid subjectId, string title, DateTime deadline)
     {
         using var db = await dbFactory.CreateDbContextAsync();
-
         var subject = await db.Subjects
             .Include(s => s.Assignments)
-            .Include(s => s.TargetGroups)
-            .FirstOrDefaultAsync(s => s.Id == subjectId);
+            .FirstOrDefaultAsync(s => s.Id == subjectId)
+            ?? throw new Exception("Subject not found");
 
-        if (subject == null)
-        {
-            logger.LogWarning($"Предмет {subjectId} не найден!");
-            return;
-        }
+        subject.AddAssignment(title, deadline);
 
-        subject.Assignments.Add(assignment);
         await db.SaveChangesAsync();
     }
 
     public async Task AddTargetGroupAsync(Guid subjectId, string groupName)
     {
         using var db = await dbFactory.CreateDbContextAsync();
+        var subject = await db.Subjects.Include(s => s.TargetGroups)
+            .FirstOrDefaultAsync(s => s.Id == subjectId)
+            ?? throw new Exception("Subject not found");
 
+        subject.AddTargetGroup(groupName);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<Guid> CreateSubjectAsync(string title, int semester)
+    {
+        using var db = await dbFactory.CreateDbContextAsync();
+
+        var titleVo = new SubjectTitle(title);
+
+        var subject = new Subject(titleVo, semester);
+        db.Subjects.Add(subject);
+        await db.SaveChangesAsync();
+        return subject.Id;
+    }
+
+    public async Task DeleteAssignmentAsync(Guid subjectId, Guid assignmentId)
+    {
+        using var db = await dbFactory.CreateDbContextAsync();
         var subject = await db.Subjects
             .Include(s => s.Assignments)
-            .Include(s => s.TargetGroups)
             .FirstOrDefaultAsync(s => s.Id == subjectId);
 
-        if (subject == null)
+        if (subject != null)
         {
-            logger.LogWarning($"Предмет {subjectId} не найден!");
-            return;
+            subject.RemoveAssignment(assignmentId);
+            await db.SaveChangesAsync();
         }
-
-        subject.TargetGroups.Add(
-            new SubjectTargetGroup
-            {
-                Id = Guid.NewGuid(),
-                GroupName = groupName,
-                SubjectId = subjectId,
-                Subject = subject
-            });
-
-        await db.SaveChangesAsync();
-    }
-
-    public async Task CreateSubjectAsync(Subject subject)
-    {
-        using var db = await dbFactory.CreateDbContextAsync();
-
-        await db.Subjects.AddAsync(subject);
-
-        await db.SaveChangesAsync();
-    }
-
-    public async Task DeleteAssignmentAsync(Guid assignmentId)
-    {
-        using var db = await dbFactory.CreateDbContextAsync();
-
-        var assignment = await db.Assignments
-            .Include(a => a.Subject)
-            .FirstOrDefaultAsync(a => a.Id == assignmentId);
-
-        if (assignment == null)
-        {
-            logger.LogWarning($"Задача {assignmentId} не найдена!");
-            return;
-        }
-
-        assignment.Subject.Assignments.Remove(assignment);
-
-        await db.SaveChangesAsync();
     }
 
     public async Task DeleteSubjectAsync(Guid id)
     {
         using var db = await dbFactory.CreateDbContextAsync();
-
         var subject = await db.Subjects.FindAsync(id);
-
-        if (subject == null)
+        if (subject != null)
         {
-            logger.LogWarning($"Предмет {id} не найден!");
-            return;
+            db.Subjects.Remove(subject);
+            await db.SaveChangesAsync();
         }
-
-        db.Subjects.Remove(subject);
-
-        await db.SaveChangesAsync();
     }
 
     public async Task<List<Subject>> GetAllSubjectsAsync()
@@ -117,25 +87,27 @@ public class SubjectService(
     {
         using var db = await dbFactory.CreateDbContextAsync();
 
-        var assignment = await db.Assignments
-            .Include(a => a.Subject)
-            .ThenInclude(s => s.TargetGroups)
-            .FirstOrDefaultAsync(a => a.Id == assignmentId);
+        var subject = await db.Subjects
+            .AsNoTracking()
+            .Include(s => s.TargetGroups)
+            .FirstOrDefaultAsync(s => s.Assignments.Any(a => a.Id == assignmentId));
 
-        if (assignment == null || assignment.Subject.TargetGroups.Count == 0)
-            return new List<Student>();
+        if (subject == null || subject.TargetGroups.Count == 0)
+            return [];
 
-        var targetGroupNames = assignment.Subject.TargetGroups
+        var targetGroupNames = subject.TargetGroups
             .Select(tg => tg.GroupName)
             .ToList();
 
         var submittedStudentIds = await db.Submissions
+            .AsNoTracking()
             .Where(s => s.AssignmentId == assignmentId)
             .Select(s => s.StudentId)
             .ToListAsync();
 
         return await db.Students
-            .Where(s => targetGroupNames.Contains(s.Group))
+            .AsNoTracking()
+            .Where(s => targetGroupNames.Contains(s.Group.Value))
             .Where(s => !submittedStudentIds.Contains(s.Id))
             .OrderBy(s => s.Group)
             .ThenBy(s => s.Name)
@@ -153,39 +125,47 @@ public class SubjectService(
             .FirstOrDefaultAsync(s => s.Id == id);
     }
 
-    public async Task RemoveTargetGroupAsync(Guid targetGroupId)
+    public async Task RemoveTargetGroupAsync(Guid subjectId, Guid targetGroupId)
     {
         using var db = await dbFactory.CreateDbContextAsync();
 
-        var targetGroup = await db.TargetGroups
-            .Include(tg => tg.Subject)
-            .FirstOrDefaultAsync(tg => tg.Id == targetGroupId);
+        var subject = await db.Subjects
+            .Include(s => s.TargetGroups)
+            .FirstOrDefaultAsync(s => s.Id == subjectId);
 
-        if (targetGroup == null)
-        {
-            logger.LogWarning($"Целевая группа {targetGroupId} не найдена!");
-            return;
-        }
+        if (subject == null) return;
 
-        targetGroup.Subject.TargetGroups.Remove(targetGroup);
+        subject.RemoveTargetGroup(targetGroupId);
 
         await db.SaveChangesAsync();
     }
 
-    public async Task UpdateAssignmentAsync(Assignment assignment)
+    public async Task UpdateAssignmentAsync(Guid subjectId, Guid assignmentId, string title, DateTime deadline)
     {
         using var db = await dbFactory.CreateDbContextAsync();
 
-        db.Assignments.Update(assignment);
+        var subject = await db.Subjects
+            .Include(s => s.Assignments)
+            .FirstOrDefaultAsync(s => s.Id == subjectId)
+            ?? throw new Exception("Subject not found");
 
+        var assignment = subject.Assignments.FirstOrDefault(a => a.Id == assignmentId)
+            ?? throw new Exception("Assignment not found");
+
+        assignment.Update(title, deadline);
         await db.SaveChangesAsync();
     }
 
-    public async Task UpdateSubjectAsync(Subject subject)
+    public async Task UpdateSubjectAsync(Guid id, string title, int semester)
     {
         using var db = await dbFactory.CreateDbContextAsync();
 
-        db.Subjects.Update(subject);
+        var subject = await db.Subjects.FindAsync(id)
+            ?? throw new Exception("Subject not found");
+
+        var titleVo = new SubjectTitle(title);
+
+        subject.Update(titleVo, semester);
 
         await db.SaveChangesAsync();
     }

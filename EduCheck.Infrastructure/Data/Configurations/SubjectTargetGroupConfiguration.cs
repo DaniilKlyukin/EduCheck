@@ -1,4 +1,5 @@
 ﻿using EduCheck.Core.Entities;
+using EduCheck.Core.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -10,9 +11,18 @@ public class SubjectTargetGroupConfiguration : IEntityTypeConfiguration<SubjectT
     {
         builder.HasKey(a => a.Id);
 
-        builder.HasOne(a => a.Subject)
+        builder.Property(tg => tg.Id)
+            .ValueGeneratedOnAdd();
+
+        builder.Property(tg => tg.GroupName)
+            .HasConversion(v => v.Value, v => new GroupName(v))
+            .HasColumnType("citext")
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.HasOne<Subject>()
             .WithMany(s => s.TargetGroups)
-            .HasForeignKey(a => a.SubjectId)
+            .HasForeignKey(tg => tg.SubjectId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

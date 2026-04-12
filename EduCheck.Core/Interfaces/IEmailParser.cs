@@ -1,6 +1,6 @@
 ﻿namespace EduCheck.Core.Interfaces;
 
-public record ParsedEmail(string SubjectTitle, string Group, string AssignmentTitle);
+public record ParsedEmail(string SubjectTitle, int Semester, string Group, string AssignmentTitle);
 
 public interface IEmailParser
 {

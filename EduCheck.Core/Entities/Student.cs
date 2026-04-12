@@ -1,16 +1,22 @@
-﻿namespace EduCheck.Core.Entities;
+﻿using EduCheck.Core.ValueObjects;
 
-/// <summary>
-/// Информация о студенте. Идентификация происходит преимущественно по Email.
-/// </summary>
+namespace EduCheck.Core.Entities;
+
 public class Student
 {
-    public Guid Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string Group { get; set; } = string.Empty;
+    public Guid Id { get; private set; }
+    public string Name { get; private set; }
+    public GroupName Group { get; private set; }
+    public EmailAddress Email { get; private set; }
 
-    /// <summary>
-    /// Уникальный адрес почты, используемый для сопоставления входящих писем.
-    /// </summary>
-    public string Email { get; set; } = string.Empty;
+    // Для EF Core
+    private Student() { }
+
+    public Student(string name, GroupName group, EmailAddress email)
+    {
+        Id = Guid.NewGuid();
+        Name = string.IsNullOrWhiteSpace(name) ? throw new ArgumentNullException(nameof(name)) : name;
+        Group = group ?? throw new ArgumentNullException(nameof(group));
+        Email = email ?? throw new ArgumentNullException(nameof(email));
+    }
 }

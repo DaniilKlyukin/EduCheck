@@ -44,5 +44,5 @@
     private IEnumerable<Student> FilteredStudents => students
         .Where(s => string.IsNullOrWhiteSpace(searchTerm)
                 || s.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
-                || s.Group.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+                || s.Group.ToString().Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
 }

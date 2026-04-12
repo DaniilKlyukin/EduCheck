@@ -1,4 +1,5 @@
 ﻿using EduCheck.Core.Entities;
+using EduCheck.Core.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -10,7 +11,13 @@ public class AssignmentConfiguration : IEntityTypeConfiguration<Assignment>
     {
         builder.HasKey(a => a.Id);
 
-        builder.HasOne(a => a.Subject)
+        builder.Property(a => a.Title)
+            .HasConversion(v => v.Value, v => new AssignmentTitle(v))
+            .HasColumnType("citext")
+            .HasMaxLength(250)
+            .IsRequired();
+
+        builder.HasOne<Subject>()
             .WithMany(s => s.Assignments)
             .HasForeignKey(a => a.SubjectId)
             .OnDelete(DeleteBehavior.Cascade);

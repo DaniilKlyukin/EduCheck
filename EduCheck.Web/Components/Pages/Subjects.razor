@@ -1,71 +1,58 @@
 ﻿@page "/subjects"
-@rendermode InteractiveServer
 @using EduCheck.Core.Entities
 @using EduCheck.Core.Interfaces
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
-@using static Microsoft.AspNetCore.Components.Web.RenderMode
 @inject ISubjectService SubjectService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Предметы</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h3>Учебные предметы</h3>
-    <button class="btn btn-primary" @onclick="() => showCreateModal = true">Добавить предмет</button>
+<div class="d-flex justify-content-between mb-4">
+    <h3>Предметы</h3>
+    <button class="btn btn-primary" @onclick="() => OpenModal(null)">Добавить предмет</button>
 </div>
 
 <div class="row">
-    @foreach (var subject in subjects)
+    @foreach (var s in subjects)
     {
         <div class="col-md-4 mb-3">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">@subject.Title</h5>
-                    <h6 class="card-subtitle mb-2 text-muted">Семестр: @subject.Semester</h6>
-                    <p class="card-text">Заданий: @subject.Assignments.Count</p>
-                    <div class="d-flex flex-wrap gap-2">
-                        <a href="/subject/@subject.Id" class="btn btn-sm btn-outline-primary flex-fill">Управление</a>
-                        <button class="btn btn-sm btn-outline-danger flex-fill" @onclick="() => DeleteSubject(subject.Id)">Удалить</button>
-                        <button class="btn btn-sm btn-outline-primary flex-fill" @onclick="() => EditSubject(subject)">Редактировать</button>
-                    </div>
+            <div class="card p-3 shadow-sm">
+                <h5>@s.Title</h5>
+                <p>Семестр: @s.Semester</p>
+                <div class="d-flex flex-wrap gap-2 mt-auto pt-3">
+                    <a href="/subject/@s.Id" class="btn btn-sm btn-info text-white">
+                        <i class="bi bi-gear-fill me-1"></i>Управление
+                    </a>
+                    <button class="btn btn-sm btn-warning" @onclick="() => OpenModal(s)">
+                        <i class="bi bi-pencil-square me-1"></i>Правка
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSubject(s.Id)">
+                        <i class="bi bi-trash-fill me-1"></i>Удалить
+                    </button>
                 </div>
             </div>
         </div>
     }
 </div>
 
-@if (showCreateModal)
+@if (showModal)
 {
     <div class="modal show d-block" style="background: rgba(0,0,0,0.5)">
         <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">@(isEditMode ? "Редактировать предмет" : "Новый предмет")</h5>
-                    <button type="button" class="btn-close" @onclick="() => showCreateModal = false"></button>
+            <div class="modal-content p-4">
+                <div class="modal-header"><h5>Предмет</h5></div>
+                <div class="mb-3">
+                    <label>Название</label>
+                    <input @bind="form.Title" class="form-control" />
                 </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Название предмета</label>
-                        <input @bind="newSubject.Title"
-                               class="form-control"
-                               placeholder="Например, ООП или Высшая математика" />
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Семестр</label>
-                        <input @bind="newSubject.Semester"
-                               type="number"
-                               min="1"
-                               max="12"
-                               class="form-control"
-                               placeholder="Введите номер семестра (1-12)" />
-                        <div class="form-text">Укажите семестр, в котором преподается дисциплина.</div>
-                    </div>
+                <div class="mb-3">
+                    <label>Семестр</label>
+                    <input @bind="form.Semester" type="number" class="form-control" />
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" @onclick="() => showCreateModal = false">Отмена</button>
-                    <button class="btn btn-primary" @onclick="SaveSubject">Сохранить</button>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" @onclick="Save">Сохранить</button>
+                    <button class="btn btn-secondary" @onclick="() => showModal = false">Отмена</button>
                 </div>
             </div>
         </div>
@@ -73,48 +60,47 @@
 }
 
 @code {
-    private bool showCreateModal;
     private List<Subject> subjects = new();
-    private Subject newSubject = new();
-    private bool isEditMode;
+    private bool showModal;
+    private SubjectFormModel form = new();
 
-    protected override async Task OnInitializedAsync()
+    public class SubjectFormModel
     {
-        subjects = await SubjectService.GetAllSubjectsAsync();
+        public Guid? Id { get; set; }
+        public string Title { get; set; } = "";
+        public int Semester { get; set; } = 1;
     }
 
-    private void EditSubject(Subject s)
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load() => subjects = await SubjectService.GetAllSubjectsAsync();
+
+    private void OpenModal(Subject? s)
     {
-        newSubject = new Subject { Id = s.Id, Title = s.Title, Semester = s.Semester };
-        isEditMode = true;
-        showCreateModal = true;
+        if (s == null) form = new SubjectFormModel();
+        else form = new SubjectFormModel { Id = s.Id, Title = s.Title.ToString(), Semester = s.Semester };
+        showModal = true;
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(form.Title)) return;
+
+        if (form.Id == null)
+            await SubjectService.CreateSubjectAsync(form.Title, form.Semester);
+        else
+            await SubjectService.UpdateSubjectAsync(form.Id.Value, form.Title, form.Semester);
+        
+        showModal = false;
+        await Load();
     }
 
     private async Task DeleteSubject(Guid id)
     {
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
-            "Вы действительно хотите удалить этот предмет? Все связанные работы студентов будут безвозвратно удалены.");
-
-        if (confirmed)
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "Удалить предмет со всеми заданиями и работами?"))
         {
             await SubjectService.DeleteSubjectAsync(id);
-
-            subjects = await SubjectService.GetAllSubjectsAsync();
+            await Load();
         }
-    }
-
-    private async Task SaveSubject()
-    {
-        if (string.IsNullOrWhiteSpace(newSubject.Title)) return;
-
-        if (isEditMode)
-            await SubjectService.UpdateSubjectAsync(newSubject);
-        else
-            await SubjectService.CreateSubjectAsync(newSubject);
-
-        showCreateModal = false;
-        isEditMode = false;
-        newSubject = new();
-        subjects = await SubjectService.GetAllSubjectsAsync();
     }
 }

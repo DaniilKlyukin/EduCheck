@@ -1,7 +1,5 @@
-using EduCheck.Core.Interfaces;
 using EduCheck.EmailWorker;
 using EduCheck.Infrastructure.Data;
-using EduCheck.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Minio;
 

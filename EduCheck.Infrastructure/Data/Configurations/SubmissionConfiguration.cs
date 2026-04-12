@@ -9,20 +9,21 @@ public class SubmissionConfiguration : IEntityTypeConfiguration<Submission>
     public void Configure(EntityTypeBuilder<Submission> builder)
     {
         builder.HasKey(s => s.Id);
-
         builder.HasIndex(s => new { s.StudentId, s.AssignmentId }).IsUnique();
+
+        builder.Metadata.FindNavigation(nameof(Submission.History))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+        builder.Metadata.FindNavigation(nameof(Submission.Reviews))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasOne(s => s.Student)
             .WithMany()
-            .HasForeignKey(s => s.StudentId);
+            .HasForeignKey(s => s.StudentId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(s => s.Assignment)
             .WithMany()
-            .HasForeignKey(s => s.AssignmentId);
-
-        builder.HasMany(s => s.History)
-            .WithOne()
-            .HasForeignKey(h => h.SubmissionId)
+            .HasForeignKey(s => s.AssignmentId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
