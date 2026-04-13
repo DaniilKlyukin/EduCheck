@@ -11,13 +11,13 @@ public class StudentRepository(AppDbContext db) : IStudentRepository
     public async Task<Result<StudentAggregate>> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var student = await db.Students.FindAsync([id], ct);
-        return student ?? Result.Failure<StudentAggregate>(new DomainError("Student.NotFound", "Студент не найден."));
+        return student ?? Result.Failure<StudentAggregate>("Student.NotFound", "Студент не найден.");
     }
 
     public async Task<Result<StudentAggregate>> GetByEmailAsync(EmailAddress email, CancellationToken ct = default)
     {
         var student = await db.Students.FirstOrDefaultAsync(s => s.Email == email, ct);
-        return student ?? Result.Failure<StudentAggregate>(new DomainError("Student.NotFound", "Студент с таким email не найден."));
+        return student ?? Result.Failure<StudentAggregate>("Student.NotFound", "Студент с таким email не найден.");
     }
 
     public async Task<Result<List<StudentAggregate>>> GetAllAsync(CancellationToken ct = default)

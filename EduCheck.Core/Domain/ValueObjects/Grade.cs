@@ -13,7 +13,7 @@ public record Grade : ValueObject
     public static Result<Grade> Create(int value)
     {
         if (value < Min.Value || value > Max.Value)
-            return Result.Failure<Grade>("Grade.Invalid", "Оценка должна быть от 0 до 10.");
+            return Result.Failure<Grade>("Grade.Invalid", $"Оценка должна быть от {Min.Value} до {Max.Value}.");
         return new Grade(value);
     }
 }

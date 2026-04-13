@@ -15,7 +15,7 @@ public class SubmissionAggregate : AggregateRoot
     public Guid StudentId { get; private set; }
     public Guid AssignmentId { get; private set; }
     public SubmissionStatus Status { get; private set; }
-    public int CurrentVersion { get; private set; }
+    public SubmissionVersion? CurrentVersion { get; private set; }
     public DateTime LastActivityAt { get; private set; }
 
     private readonly List<SubmissionHistory> _history = new();
@@ -34,7 +34,7 @@ public class SubmissionAggregate : AggregateRoot
             StudentId = studentId,
             AssignmentId = assignmentId,
             Status = SubmissionStatus.PendingAnalysis,
-            CurrentVersion = 0,
+            CurrentVersion = null,
             LastActivityAt = DateTime.UtcNow
         };
         return submission;
@@ -48,7 +48,10 @@ public class SubmissionAggregate : AggregateRoot
         if (_history.Any(h => h.FileHash == file.Hash))
             return Result.Failure("Submission.Duplicate", "Этот файл уже был загружен ранее.");
 
-        CurrentVersion++;
+        CurrentVersion = CurrentVersion == null
+            ? SubmissionVersion.Initial
+            : CurrentVersion.Increment();
+
         var isLate = DateTime.UtcNow > deadline;
 
         var historyEntry = new SubmissionHistory(Id, CurrentVersion, file, isLate);
@@ -57,7 +60,7 @@ public class SubmissionAggregate : AggregateRoot
         Status = SubmissionStatus.PendingAnalysis;
         LastActivityAt = DateTime.UtcNow;
 
-        RaiseDomainEvent(new SubmissionAttemptAddedEvent(Id, historyEntry.Id, CurrentVersion));
+        RaiseDomainEvent(new SubmissionAttemptAddedEvent(Id, historyEntry.Id, CurrentVersion.Value));
         return Result.Success();
     }
 

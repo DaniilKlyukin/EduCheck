@@ -120,7 +120,7 @@ else
 
     private IEnumerable<StudentAggregate> FilteredStudents => _students
         .Where(s => string.IsNullOrWhiteSpace(_searchTerm)
-                || s.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)
+                || s.Name.Value.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)
                 || s.Group.Value.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)
                 || s.Email.Value.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase));
 }

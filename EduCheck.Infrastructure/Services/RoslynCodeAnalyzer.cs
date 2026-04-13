@@ -66,7 +66,7 @@ public sealed class RoslynCodeAnalyzer(
     private string PerformCompilationAnalysis(IEnumerable<SyntaxTree> syntaxTrees)
     {
         var compilationOptions = new CSharpCompilationOptions(
-            OutputKind.ConsoleApplication, // Поддержка Top-level statements
+            OutputKind.ConsoleApplication,
             optimizationLevel: OptimizationLevel.Release,
             warningLevel: 4,
             nullableContextOptions: NullableContextOptions.Enable,

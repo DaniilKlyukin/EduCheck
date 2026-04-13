@@ -19,6 +19,12 @@ public class ReviewConfiguration : IEntityTypeConfiguration<Review>
                 v => v == null ? null : Grade.Create(v.Value).Value)
             .IsRequired(false);
 
+        builder.Property(r => r.SubmissionVersion)
+            .HasConversion(
+                v => v.Value,
+                v => SubmissionVersion.Create(v).Value)
+            .IsRequired();
+
         builder.Property(r => r.TeacherComment)
             .HasMaxLength(2000);
 

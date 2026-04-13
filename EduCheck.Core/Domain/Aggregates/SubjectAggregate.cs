@@ -11,7 +11,7 @@ namespace EduCheck.Core.Domain.Aggregates;
 public class SubjectAggregate : AggregateRoot
 {
     public SubjectTitle Title { get; private set; }
-    public int Semester { get; private set; }
+    public Semester Semester { get; private set; }
     private readonly List<Assignment> _assignments = new();
     private readonly List<SubjectTargetGroup> _targetGroups = new();
 
@@ -20,21 +20,15 @@ public class SubjectAggregate : AggregateRoot
 
     private SubjectAggregate() { }
 
-    public static Result<SubjectAggregate> Create(SubjectTitle title, int semester)
+    public static Result<SubjectAggregate> Create(SubjectTitle title, Semester semester)
     {
-        if (semester <= 0)
-            return Result.Failure<SubjectAggregate>("Subject.InvalidSemester", "Семестр должен быть больше 0.");
-
         var subject = new SubjectAggregate { Id = Guid.NewGuid(), Title = title, Semester = semester };
         subject.RaiseDomainEvent(new SubjectCreatedEvent(subject.Id, title.Value));
         return subject;
     }
 
-    public Result Update(SubjectTitle title, int semester)
+    public Result Update(SubjectTitle title, Semester semester)
     {
-        if (semester <= 0)
-            return Result.Failure("Subject.InvalidSemester", "Семестр должен быть больше 0.");
-
         Title = title;
         Semester = semester;
         return Result.Success();

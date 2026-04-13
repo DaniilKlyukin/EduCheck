@@ -13,10 +13,13 @@ public class SubjectService(
     public async Task<Result<Guid>> CreateSubjectAsync(string title, int semester)
     {
         var titleRes = SubjectTitle.Create(title);
-        if (titleRes.IsFailure) return Result.Failure<Guid>(titleRes.Error);
+        if (titleRes.IsFailure) return titleRes.Error;
 
-        var subjectRes = SubjectAggregate.Create(titleRes.Value, semester);
-        if (subjectRes.IsFailure) return Result.Failure<Guid>(subjectRes.Error);
+        var semesterRes = Semester.Create(semester);
+        if (semesterRes.IsFailure) return semesterRes.Error;
+
+        var subjectRes = SubjectAggregate.Create(titleRes.Value, semesterRes.Value);
+        if (subjectRes.IsFailure) return subjectRes.Error;
 
         await subjectRepository.AddAsync(subjectRes.Value);
         return subjectRes.Value.Id;
@@ -25,13 +28,16 @@ public class SubjectService(
     public async Task<Result> UpdateSubjectAsync(Guid id, string title, int semester)
     {
         var subjectRes = await subjectRepository.GetByIdAsync(id);
-        if (subjectRes.IsFailure) return subjectRes;
+        if (subjectRes.IsFailure) return subjectRes.Error;
 
         var titleRes = SubjectTitle.Create(title);
-        if (titleRes.IsFailure) return titleRes;
+        if (titleRes.IsFailure) return titleRes.Error;
 
-        var updateRes = subjectRes.Value.Update(titleRes.Value, semester);
-        if (updateRes.IsFailure) return updateRes;
+        var semesterRes = Semester.Create(semester);
+        if (semesterRes.IsFailure) return semesterRes.Error;
+
+        var updateRes = subjectRes.Value.Update(titleRes.Value, semesterRes.Value);
+        if (updateRes.IsFailure) return updateRes.Error;
 
         await subjectRepository.UpdateAsync(subjectRes.Value);
         return Result.Success();
@@ -40,13 +46,13 @@ public class SubjectService(
     public async Task<Result> AddAssignmentAsync(Guid subjectId, string title, DateTime deadline)
     {
         var subjectRes = await subjectRepository.GetByIdAsync(subjectId);
-        if (subjectRes.IsFailure) return subjectRes;
+        if (subjectRes.IsFailure) return subjectRes.Error;
 
         var titleRes = AssignmentTitle.Create(title);
-        if (titleRes.IsFailure) return titleRes;
+        if (titleRes.IsFailure) return titleRes.Error;
 
         var result = subjectRes.Value.AddAssignment(titleRes.Value, deadline);
-        if (result.IsFailure) return result;
+        if (result.IsFailure) return result.Error;
 
         await subjectRepository.UpdateAsync(subjectRes.Value);
         return Result.Success();
@@ -55,13 +61,13 @@ public class SubjectService(
     public async Task<Result> UpdateAssignmentAsync(Guid subjectId, Guid assignmentId, string title, DateTime deadline)
     {
         var subjectRes = await subjectRepository.GetByIdAsync(subjectId);
-        if (subjectRes.IsFailure) return subjectRes;
+        if (subjectRes.IsFailure) return subjectRes.Error;
 
         var titleRes = AssignmentTitle.Create(title);
-        if (titleRes.IsFailure) return titleRes;
+        if (titleRes.IsFailure) return titleRes.Error;
 
         var result = subjectRes.Value.UpdateAssignment(assignmentId, titleRes.Value, deadline);
-        if (result.IsFailure) return result;
+        if (result.IsFailure) return result.Error;
 
         await subjectRepository.UpdateAsync(subjectRes.Value);
         return Result.Success();
@@ -71,19 +77,19 @@ public class SubjectService(
     {
         var subjectRes = await subjectRepository.GetByAssignmentIdAsync(assignmentId);
         if (subjectRes.IsFailure)
-            return Result.Failure<List<StudentAggregate>>(subjectRes.Error);
+            return subjectRes.Error;
 
         if (subjectRes.Value.TargetGroups.Count == 0)
             return new List<StudentAggregate>();
 
         var submittedIdsRes = await submissionRepository.GetStudentIdsByAssignmentAsync(assignmentId);
         if (submittedIdsRes.IsFailure)
-            return Result.Failure<List<StudentAggregate>>(submittedIdsRes.Error);
+            return submittedIdsRes.Error;
 
         var groups = subjectRes.Value.TargetGroups.Select(g => g.GroupName.Value).ToList();
         var allStudentsRes = await studentRepository.GetByGroupsAsync(groups);
         if (allStudentsRes.IsFailure)
-            return Result.Failure<List<StudentAggregate>>(allStudentsRes.Error);
+            return allStudentsRes.Error;
 
         var submittedIds = submittedIdsRes.Value;
         var allStudentsInGroups = allStudentsRes.Value;
@@ -109,7 +115,7 @@ public class SubjectService(
     public async Task<Result> RemoveTargetGroupAsync(Guid subjectId, Guid targetGroupId)
     {
         var subjectRes = await subjectRepository.GetByIdAsync(subjectId);
-        if (subjectRes.IsFailure) return subjectRes;
+        if (subjectRes.IsFailure) return subjectRes.Error;
 
         subjectRes.Value.RemoveTargetGroup(targetGroupId);
         await subjectRepository.UpdateAsync(subjectRes.Value);
@@ -119,10 +125,10 @@ public class SubjectService(
     public async Task<Result> AddTargetGroupAsync(Guid subjectId, string groupName)
     {
         var subjectRes = await subjectRepository.GetByIdAsync(subjectId);
-        if (subjectRes.IsFailure) return subjectRes;
+        if (subjectRes.IsFailure) return subjectRes.Error;
 
         var groupRes = GroupName.Create(groupName);
-        if (groupRes.IsFailure) return groupRes;
+        if (groupRes.IsFailure) return groupRes.Error;
 
         subjectRes.Value.AddTargetGroup(groupRes.Value);
         await subjectRepository.UpdateAsync(subjectRes.Value);
@@ -132,7 +138,7 @@ public class SubjectService(
     public async Task<Result> DeleteAssignmentAsync(Guid subjectId, Guid assignmentId)
     {
         var subjectRes = await subjectRepository.GetByIdAsync(subjectId);
-        if (subjectRes.IsFailure) return subjectRes;
+        if (subjectRes.IsFailure) return subjectRes.Error;
 
         subjectRes.Value.RemoveAssignment(assignmentId);
         await subjectRepository.UpdateAsync(subjectRes.Value);

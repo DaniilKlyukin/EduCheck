@@ -24,6 +24,8 @@ public class Result
     public static Result<TValue> Success<TValue>(TValue value) => new(value, true, DomainError.None);
     public static Result<TValue> Failure<TValue>(string code, string message) => new(default, false, new DomainError(code, message));
     public static Result<TValue> Failure<TValue>(DomainError error) => new(default, false, error);
+
+    public static implicit operator Result(DomainError error) => Failure(error);
 }
 
 public class Result<TValue> : Result
@@ -41,4 +43,6 @@ public class Result<TValue> : Result
     }
 
     public static implicit operator Result<TValue>(TValue value) => Success(value);
+
+    public static implicit operator Result<TValue>(DomainError error) => Failure<TValue>(error);
 }

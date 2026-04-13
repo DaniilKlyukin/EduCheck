@@ -24,7 +24,7 @@ public class SubmissionService(
     public async Task<Result> SubmitReviewAsync(Guid submissionId, int? gradeValue, string? comment, SubmissionStatus newStatus)
     {
         var submissionRes = await submissionRepository.GetByIdAsync(submissionId);
-        if (submissionRes.IsFailure) return submissionRes;
+        if (submissionRes.IsFailure) return submissionRes.Error;
 
         var submission = submissionRes.Value;
 
@@ -32,12 +32,12 @@ public class SubmissionService(
         if (gradeValue.HasValue)
         {
             var gradeRes = Grade.Create(gradeValue.Value);
-            if (gradeRes.IsFailure) return Result.Failure(gradeRes.Error);
+            if (gradeRes.IsFailure) return gradeRes.Error;
             grade = gradeRes.Value;
         }
 
         var reviewResult = submission.Review(grade, comment, newStatus);
-        if (reviewResult.IsFailure) return reviewResult;
+        if (reviewResult.IsFailure) return reviewResult.Error;
 
         return await submissionRepository.UpdateAsync(submission);
     }
@@ -45,7 +45,7 @@ public class SubmissionService(
     public async Task<Result<string>> GetDownloadUrlAsync(Guid historyId)
     {
         var historyRes = await submissionRepository.GetHistoryByIdAsync(historyId);
-        if (historyRes.IsFailure) return Result.Failure<string>(historyRes.Error);
+        if (historyRes.IsFailure) return historyRes.Error;
 
         var history = historyRes.Value;
 

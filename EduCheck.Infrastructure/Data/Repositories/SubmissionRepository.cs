@@ -20,13 +20,13 @@ public class SubmissionRepository(AppDbContext db) : ISubmissionRepository
                 .FirstOrDefaultAsync(s => s.Id == id, ct);
 
             if (submission == null)
-                return Result.Failure<SubmissionAggregate>(new DomainError("Submission.NotFound", "Работа не найдена."));
+                return Result.Failure<SubmissionAggregate>("Submission.NotFound", "Работа не найдена.");
 
             return submission;
         }
         catch (Exception ex)
         {
-            return Result.Failure<SubmissionAggregate>(new DomainError("Database.Error", ex.Message));
+            return Result.Failure<SubmissionAggregate>("Database.Error", ex.Message);
         }
     }
 
@@ -42,7 +42,7 @@ public class SubmissionRepository(AppDbContext db) : ISubmissionRepository
         }
         catch (Exception ex)
         {
-            return Result.Failure<bool>(new DomainError("Database.Error", ex.Message));
+            return Result.Failure<bool>("Database.Error", ex.Message);
         }
     }
 
@@ -57,7 +57,7 @@ public class SubmissionRepository(AppDbContext db) : ISubmissionRepository
         }
         catch (Exception ex)
         {
-            return Result.Failure<List<Guid>>(new DomainError("Database.Error", ex.Message));
+            return Result.Failure<List<Guid>>("Database.Error", ex.Message);
         }
     }
 
@@ -72,11 +72,11 @@ public class SubmissionRepository(AppDbContext db) : ISubmissionRepository
                         where assignment.Id == submission.AssignmentId
                         select new SubmissionSummaryDto(
                             submission.Id,
-                            student.Name,
+                            student.Name.Value,
                             student.Group.Value,
                             subject.Title.Value,
                             assignment.Title.Value,
-                            submission.CurrentVersion,
+                            submission.CurrentVersion == null ? null : submission.CurrentVersion.Value,
                             submission.Status,
                             submission.History.Any(h => h.IsLate)
                         );
@@ -85,7 +85,7 @@ public class SubmissionRepository(AppDbContext db) : ISubmissionRepository
         }
         catch (Exception ex)
         {
-            return Result.Failure<List<SubmissionSummaryDto>>(new DomainError("Database.Error", ex.Message));
+            return Result.Failure<List<SubmissionSummaryDto>>("Database.Error", ex.Message);
         }
     }
 
@@ -97,13 +97,13 @@ public class SubmissionRepository(AppDbContext db) : ISubmissionRepository
                 .FirstOrDefaultAsync(h => h.Id == historyId, ct);
 
             if (history == null)
-                return Result.Failure<SubmissionHistory>(new DomainError("History.NotFound", "Запись в истории не найдена."));
+                return Result.Failure<SubmissionHistory>("History.NotFound", "Запись в истории не найдена.");
 
             return history;
         }
         catch (Exception ex)
         {
-            return Result.Failure<SubmissionHistory>(new DomainError("Database.Error", ex.Message));
+            return Result.Failure<SubmissionHistory>("Database.Error", ex.Message);
         }
     }
 
@@ -117,7 +117,7 @@ public class SubmissionRepository(AppDbContext db) : ISubmissionRepository
         }
         catch (Exception ex)
         {
-            return Result.Failure(new DomainError("Database.Error", ex.Message));
+            return Result.Failure("Database.Error", ex.Message);
         }
     }
 
@@ -130,7 +130,7 @@ public class SubmissionRepository(AppDbContext db) : ISubmissionRepository
         }
         catch (Exception ex)
         {
-            return Result.Failure(new DomainError("Database.Error", ex.Message));
+            return Result.Failure("Database.Error", ex.Message);
         }
     }
 
@@ -140,7 +140,7 @@ public class SubmissionRepository(AppDbContext db) : ISubmissionRepository
         {
             var submission = await db.Submissions.FindAsync([id], ct);
             if (submission == null)
-                return Result.Failure(new DomainError("Submission.NotFound", "Работа не найдена."));
+                return Result.Failure("Submission.NotFound", "Работа не найдена.");
 
             db.Submissions.Remove(submission);
             await db.SaveChangesAsync(ct);
@@ -148,7 +148,7 @@ public class SubmissionRepository(AppDbContext db) : ISubmissionRepository
         }
         catch (Exception ex)
         {
-            return Result.Failure(new DomainError("Database.Error", ex.Message));
+            return Result.Failure("Database.Error", ex.Message);
         }
     }
 }

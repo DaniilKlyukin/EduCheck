@@ -8,7 +8,7 @@ public record SubmissionSummaryDto(
     string Group,
     string SubjectTitle,
     string AssignmentTitle,
-    int Version,
+    int? Version,
     SubmissionStatus Status,
     bool HasLateUpload
 );

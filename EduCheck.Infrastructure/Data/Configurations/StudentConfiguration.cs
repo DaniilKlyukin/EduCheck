@@ -13,6 +13,7 @@ public class StudentConfiguration : IEntityTypeConfiguration<StudentAggregate>
         builder.HasKey(s => s.Id);
 
         builder.Property(s => s.Name)
+            .HasConversion(s => s.Value, v => StudentName.Create(v).Value)
             .HasMaxLength(200)
             .IsRequired();
 

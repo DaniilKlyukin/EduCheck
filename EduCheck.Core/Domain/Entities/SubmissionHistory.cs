@@ -10,7 +10,7 @@ namespace EduCheck.Core.Domain.Entities;
 public class SubmissionHistory : Entity
 {
     public Guid SubmissionId { get; private set; }
-    public int Version { get; private set; }
+    public SubmissionVersion Version { get; private set; }
     public FileMetadata File { get; private set; }
     public FileHash FileHash => File.Hash;
     public DateTime ReceivedAt { get; private set; }
@@ -19,7 +19,7 @@ public class SubmissionHistory : Entity
 
     private SubmissionHistory() { }
 
-    internal SubmissionHistory(Guid submissionId, int version, FileMetadata file, bool isLate)
+    internal SubmissionHistory(Guid submissionId, SubmissionVersion version, FileMetadata file, bool isLate)
         : base(Guid.NewGuid())
     {
         SubmissionId = submissionId;

@@ -85,7 +85,7 @@ public class MinioFileStorage : IFileStorage
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Ошибка генерации ссылки для файла {path}");
+            _logger.LogError(ex, "Ошибка генерации ссылки для файла {MinioFilePath}", path);
             return Result.Failure<string>("Storage.DownloadError", $"Ошибка генерации ссылки для файла {path}");
         }
     }

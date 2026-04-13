@@ -17,7 +17,9 @@ public class SubjectConfiguration : IEntityTypeConfiguration<SubjectAggregate>
             .HasColumnType("citext")
             .IsRequired();
 
-        builder.Property(s => s.Semester).IsRequired();
+        builder.Property(s => s.Semester)
+            .HasConversion(v => v.Value, v => Semester.Create(v).Value)
+            .IsRequired();
 
         builder.Navigation(s => s.Assignments)
             .UsePropertyAccessMode(PropertyAccessMode.Field);

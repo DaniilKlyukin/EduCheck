@@ -15,7 +15,7 @@ public class SubjectRepository(AppDbContext db) : ISubjectRepository
             .FirstOrDefaultAsync(s => s.Id == id, ct);
 
         if (subject == null)
-            return Result.Failure<SubjectAggregate>(new DomainError("Subject.NotFound", "Предмет не найден."));
+            return Result.Failure<SubjectAggregate>("Subject.NotFound", "Предмет не найден.");
 
         return subject;
     }
@@ -27,7 +27,7 @@ public class SubjectRepository(AppDbContext db) : ISubjectRepository
             .Include(s => s.TargetGroups)
             .FirstOrDefaultAsync(s => s.Assignments.Any(a => a.Id == assignmentId), ct);
 
-        return subject ?? Result.Failure<SubjectAggregate>(new DomainError("Subject.NotFound", "Предмет для данного задания не найден."));
+        return subject ?? Result.Failure<SubjectAggregate>("Subject.NotFound", "Предмет для данного задания не найден.");
     }
 
     public async Task<Result<List<SubjectAggregate>>> GetAllAsync(CancellationToken ct = default)
@@ -43,7 +43,7 @@ public class SubjectRepository(AppDbContext db) : ISubjectRepository
         }
         catch (Exception ex)
         {
-            return Result.Failure<List<SubjectAggregate>>(new DomainError("Database.Error", ex.Message));
+            return Result.Failure<List<SubjectAggregate>>("Database.Error", ex.Message);
         }
     }
 

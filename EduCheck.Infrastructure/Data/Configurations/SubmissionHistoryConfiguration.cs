@@ -34,6 +34,10 @@ public class SubmissionHistoryConfiguration : IEntityTypeConfiguration<Submissio
             file.HasIndex(f => f.Hash);
         });
 
+        builder.Property(h => h.Version)
+            .HasConversion(v => v.Value, v => SubmissionVersion.Create(v).Value)
+            .IsRequired();
+
         builder.Property(h => h.AnalysisResult)
             .HasColumnType("jsonb");
 

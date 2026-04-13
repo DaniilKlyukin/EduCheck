@@ -14,18 +14,20 @@ public class StudentService(IStudentRepository studentRepository) : IStudentServ
 
     public async Task<Result<StudentAggregate>> GetOrCreateStudentAsync(string name, string group, string email)
     {
+        var nameRes = StudentName.Create(name);
         var emailRes = EmailAddress.Create(email);
         var groupRes = GroupName.Create(group);
 
-        if (emailRes.IsFailure) return Result.Failure<StudentAggregate>(emailRes.Error);
-        if (groupRes.IsFailure) return Result.Failure<StudentAggregate>(groupRes.Error);
+        if (nameRes.IsFailure) return nameRes.Error;
+        if (emailRes.IsFailure) return emailRes.Error;
+        if (groupRes.IsFailure) return groupRes.Error;
 
         var studentRes = await studentRepository.GetByEmailAsync(emailRes.Value);
 
         if (studentRes.IsFailure)
         {
-            var createRes = StudentAggregate.Create(name, groupRes.Value, emailRes.Value);
-            if (createRes.IsFailure) return createRes;
+            var createRes = StudentAggregate.Create(nameRes.Value, groupRes.Value, emailRes.Value);
+            if (createRes.IsFailure) return createRes.Error;
 
             await studentRepository.AddAsync(createRes.Value);
             return createRes.Value;

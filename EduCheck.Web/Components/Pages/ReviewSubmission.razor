@@ -193,7 +193,7 @@ else
         if (studentTask.Result.IsSuccess)
         {
             var s = studentTask.Result.Value;
-            _studentName = s.Name;
+            _studentName = s.Name.Value;
             _groupName = s.Group.Value;
         }
 

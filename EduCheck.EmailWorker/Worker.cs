@@ -97,10 +97,10 @@ public class Worker(
         if (mailbox == null) return Result.Failure("Email.NoSender", "Отправитель не определен.");
 
         var studentRes = await studentService.GetOrCreateStudentAsync(mailbox.Name ?? mailbox.Address, parsed.Group, mailbox.Address);
-        if (studentRes.IsFailure) return Result.Failure(studentRes.Error);
+        if (studentRes.IsFailure) return studentRes.Error;
 
         var subject = await db.Subjects.Include(s => s.Assignments)
-            .FirstOrDefaultAsync(s => s.Title.Value == parsed.SubjectTitle && s.Semester == parsed.Semester, ct);
+            .FirstOrDefaultAsync(s => s.Title.Value == parsed.SubjectTitle && s.Semester.Value == parsed.Semester, ct);
 
         var assignment = subject?.Assignments.FirstOrDefault(a => a.Title.Value.Equals(parsed.AssignmentTitle, StringComparison.OrdinalIgnoreCase));
         if (assignment == null) return Result.Failure("Assignment.NotFound", $"Задание {parsed.AssignmentTitle} не найдено.");
@@ -109,7 +109,7 @@ public class Worker(
         if (archiveInfo == null) return Result.Failure("Attachment.Empty", "Письмо не содержит подходящих файлов или превышен лимит размера.");
 
         var hashRes = FileHash.Create(Convert.ToHexString(SHA256.HashData(archiveInfo.FinalFileBytes)));
-        if (hashRes.IsFailure) return Result.Failure(hashRes.Error);
+        if (hashRes.IsFailure) return hashRes.Error;
 
         var isDuplicate = await db.Submissions.AnyAsync(s =>
             s.StudentId == studentRes.Value.Id &&
@@ -121,7 +121,7 @@ public class Worker(
         return await _retryPolicy.ExecuteAsync(async () =>
         {
             var uploadRes = await storage.UploadAsync(new MemoryStream(archiveInfo.FinalFileBytes), archiveInfo.FinalFileName, "application/zip", ct);
-            if (uploadRes.IsFailure) return Result.Failure(uploadRes.Error);
+            if (uploadRes.IsFailure) return uploadRes.Error;
 
             var submission = await db.Submissions.Include(s => s.History)
                 .FirstOrDefaultAsync(s => s.StudentId == studentRes.Value.Id && s.AssignmentId == assignment.Id, ct);
@@ -134,10 +134,10 @@ public class Worker(
 
             var metadataVo = FileMetadata.Create(archiveInfo.FinalFileName, uploadRes.Value, hashRes.Value);
 
-            if (metadataVo.IsFailure) return Result.Failure(metadataVo.Error);
+            if (metadataVo.IsFailure) return metadataVo.Error;
 
             var attemptRes = submission.AddAttempt(metadataVo.Value, assignment.Deadline);
-            if (attemptRes.IsFailure) return attemptRes;
+            if (attemptRes.IsFailure) return attemptRes.Error;
 
             await db.SaveChangesAsync(ct);
 

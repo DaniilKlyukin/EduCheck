@@ -1,4 +1,5 @@
 ﻿using EduCheck.Core.Domain.Aggregates;
+using EduCheck.Core.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -14,6 +15,12 @@ public class SubmissionConfiguration : IEntityTypeConfiguration<SubmissionAggreg
         builder.Property(s => s.Status)
             .HasConversion<string>()
             .HasMaxLength(50);
+
+        builder.Property(s => s.CurrentVersion)
+            .HasConversion(
+                v => v != null ? v.Value : (int?)null,
+                v => v.HasValue ? SubmissionVersion.Create(v.Value).Value : null)
+            .IsRequired(false);
 
         builder.Navigation(s => s.History)
             .UsePropertyAccessMode(PropertyAccessMode.Field);
