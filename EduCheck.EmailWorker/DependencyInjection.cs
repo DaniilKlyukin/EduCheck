@@ -1,35 +1,23 @@
-﻿using EduCheck.Application.Interfaces;
-using EduCheck.Application.Services;
-using EduCheck.Core.Domain.Interfaces;
-using EduCheck.Infrastructure.Services;
-using MassTransit;
+﻿using MassTransit;
 
 namespace EduCheck.EmailWorker;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddEmailWorkerServices(this IServiceCollection services)
+    public static IServiceCollection AddEmailWorkerServices(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddScoped<IEmailParser, EmailParser>();
-        services.AddScoped<IFileStorage, MinioFileStorage>();
-        services.AddScoped<ICodeAnalyzer, RoslynCodeAnalyzer>();
-
-        services.AddHttpClient<IAiCodeReviewer, OllamaCodeReviewer>(client =>
-        {
-            client.BaseAddress = new Uri("http://localhost:11434/");
-            client.Timeout = TimeSpan.FromMinutes(10);
-        });
-
         services.AddMassTransit(x =>
         {
             x.AddConsumer<SubmissionAnalysisConsumer>();
 
             x.UsingRabbitMq((context, cfg) =>
             {
-                cfg.Host("localhost", "/", h =>
+                var rabbitSettings = configuration.GetSection("RabbitMq");
+
+                cfg.Host(rabbitSettings["Host"] ?? "localhost", "/", h =>
                 {
-                    h.Username("guest");
-                    h.Password("guest");
+                    h.Username(rabbitSettings["Username"] ?? "guest");
+                    h.Password(rabbitSettings["Password"] ?? "guest");
                 });
 
                 cfg.ReceiveEndpoint("submission-analysis-queue", e =>

@@ -9,7 +9,7 @@ using Minio;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure();
+builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddWebServices();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
