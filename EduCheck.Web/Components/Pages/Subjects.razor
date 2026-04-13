@@ -35,14 +35,14 @@ else
                             <span class="badge bg-info-subtle text-info border border-info-subtle">@s.Semester семестр</span>
                         </div>
                         
-                        <div class="mt-auto pt-4 d-flex gap-2">
-                            <a href="/subject/@s.Id" class="btn btn-sm btn-outline-primary flex-grow-1">
+                        <div class="mt-auto pt-4 d-flex flex-wrap gap-2">
+                            <a href="/subject/@s.Id" class="btn btn-sm btn-outline-primary flex-grow-1 text-nowrap">
                                 <i class="bi bi-gear-fill me-1"></i>Настроить
                             </a>
-                            <button class="btn btn-sm btn-light" @onclick="() => OpenModal(s)" title="Редактировать">
+                            <button class="btn btn-sm btn-light text-nowrap" @onclick="() => OpenModal(s)" title="Редактировать">
                                 <i class="bi bi-pencil-square"></i>Редактировать
                             </button>
-                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSubject(s.Id)" title="Удалить">
+                            <button class="btn btn-sm btn-outline-danger text-nowrap" @onclick="() => DeleteSubject(s.Id)" title="Удалить">
                                 <i class="bi bi-trash-fill"></i>Удалить
                             </button>
                         </div>
